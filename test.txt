@@ -1,0 +1,2609 @@
+using NinjaTrader.Cbi;
+using NinjaTrader.Core;
+using NinjaTrader.Data;
+using NinjaTrader.Gui;
+using NinjaTrader.Gui.Tools;
+using NinjaTrader.NinjaScript;
+using NinjaTrader.NinjaScript.DrawingTools;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+using System.Globalization;
+using System.IO;
+using System.Net;
+using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
+using System.Windows;
+using System.Windows.Media;
+using System.Xml.Serialization;
+
+namespace NinjaTrader.NinjaScript.Indicators
+{
+    public class pjsOpeningRangeV2 : Indicator
+    {
+        private Dictionary<int, pjsOpeningRangeV2.Session> Sessions = new Dictionary<int, pjsOpeningRangeV2.Session>();
+
+        private pjsOpeningRangeV2.Session CurrentSession;
+
+        private bool started;
+
+        public int openingbar;
+
+        public int firstBarOfSession;
+
+        public int firstBarOfWeek;
+
+        private int sessionCounter;
+
+        private int weekCounter = -1;
+
+        private int weekNumberLast;
+
+        private double highestPrice;
+
+        private double LowestPrice;
+
+        private double RangeOpen;
+
+        private double RangeClose;
+
+        private double highestPriceLast;
+
+        private double LowestPriceLast;
+
+        private string[] lines = new string[0];
+
+        private DateTime startTime;
+
+        private DateTime endTime;
+
+        private bool timesSet;
+
+        private DateTime openingTime;
+
+        private double PriorSession_High;
+
+        private double PriorSession_Low;
+
+        private double PriorSession_Open;
+
+        private double PriorSession_Close;
+
+        private int PriorSessionLastUpdatedBar;
+
+        private double PriorWeek_High;
+
+        private double PriorWeek_Low;
+
+        private double PriorWeek_Open;
+
+        private double PriorWeek_Close;
+
+        private int PriorWeekLastUpdatedBar;
+
+        private double CurrentSession_High;
+
+        private double CurrentSession_Low;
+
+        private double CurrentSession_High_Last;
+
+        private double CurrentSession_Low_Last;
+
+        private double CurrentSession_Open;
+
+        private double CurrentSession_Close;
+
+        private double CurrentWeek_High;
+
+        private double CurrentWeek_Low;
+
+        private double CurrentWeek_High_Last;
+
+        private double CurrentWeek_Low_Last;
+
+        private double CurrentWeek_Open;
+
+        private double CurrentWeek_Close;
+
+        private Dictionary<int, double> weekly_ranges = new Dictionary<int, double>();
+
+        private Dictionary<int, double> weekly_expansion = new Dictionary<int, double>();
+
+        private Dictionary<int, double> weekly_noise = new Dictionary<int, double>();
+
+        private double weekly_range_avg;
+
+        private double weekly_range_expansion;
+
+        private double weekly_range_noise;
+
+        private int last_weekly_range_count;
+
+        private Dictionary<int, double> daily_ranges = new Dictionary<int, double>();
+
+        private Dictionary<int, double> daily_expansion = new Dictionary<int, double>();
+
+        private Dictionary<int, double> daily_noise = new Dictionary<int, double>();
+
+        private double daily_range_avg;
+
+        private double daily_range_expansion;
+
+        private double daily_range_noise;
+
+        private int last_daily_range_count;
+
+        private double fiveday_avg;
+
+        private double fiveday_noise;
+
+        private double fiveday_expansion;
+
+        private double twentyday_avg;
+
+        private double twentyday_noise;
+
+        private double twentyday_expansion;
+
+        private double percentComplete;
+
+        private double fiveweek_avg;
+
+        private double fiveweek_noise;
+
+        private double fiveweek_expansion;
+
+        private double twentyweek_avg;
+
+        private double twentyweek_noise;
+
+        private double twentyweek_expansion;
+
+        private double percentCompleteWeek;
+
+        private int drl;
+
+        private int days;
+
+        private int weeks;
+
+        private int ds;
+
+        private int remaining_time;
+
+        private string MiD = "";
+
+        private bool prodEn;
+
+        private Series<double> RHigh;
+
+        private Series<double> RLow;
+
+        private Series<double> RMid;
+
+        private Series<double> RExtension1u;
+
+        private Series<double> RExtension2u;
+
+        private Series<double> RExtension3u;
+
+        private Series<double> RExtension1d;
+
+        private Series<double> RExtension2d;
+
+        private Series<double> RExtension3d;
+
+        private bool skiphl;
+
+        private Brush linecolor = Brushes.DodgerBlue;
+
+        private Brush shadecolor = Brushes.Transparent;
+
+        private SimpleFont myFont;
+
+        private DateTime mktTime;
+
+        private double barHigh = double.MaxValue;
+
+        private double barLow = double.MinValue;
+
+        private double PriorbarHigh = double.MaxValue;
+
+        private double PriorbarLow = double.MinValue;
+
+        private Dictionary<string, double> statistics = new Dictionary<string, double>();
+
+        private bool DoOnce;
+
+        [Display(Name="Align labels right (default is left)", Order=4, GroupName="Visual")]
+        public bool AlignLabelsRight
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="AutoScale", Description="Uses autoscale attribute to ensure chart is always scaled to show all lines", Order=7, GroupName="General")]
+        public bool autoScale
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show high", Description="Mark the session high", Order=5, GroupName="OHLC - Current session")]
+        public bool CurrentSession_showHigh
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show low", Description="Mark the session low", Order=10, GroupName="OHLC - Current session")]
+        public bool CurrentSession_showLow
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show MID", Description="Mark the session mid point (50% between high and low)", Order=15, GroupName="OHLC - Current session")]
+        public bool CurrentSession_showMID
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show open", Description="Mark the opening price", Order=1, GroupName="OHLC - Current session")]
+        public bool CurrentSession_showOpen
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show high", Description="Mark the week high", Order=5, GroupName="OHLC - Current week")]
+        public bool CurrentWeek_showHigh
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show low", Description="Mark the week low", Order=10, GroupName="OHLC - Current week")]
+        public bool CurrentWeek_showLow
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show MID", Description="Mark the week mid point (50% between high and low)", Order=15, GroupName="OHLC - Current week")]
+        public bool CurrentWeek_showMID
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show open", Description="Mark the opening price", Order=1, GroupName="OHLC - Current week")]
+        public bool CurrentWeek_showOpen
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Dash Style", Order=2, GroupName="Visual")]
+        [NinjaScriptProperty]
+        public DashStyleHelper DetailDashStyle
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Draw to end of session", Description="Lines draw until end of session", Order=28, GroupName="Range Parameters")]
+        public bool drawToEndOfSession
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Dump range stats to Output", Description="Dump range stats to Output tab after chart load", Order=10, GroupName="Analysis")]
+        public bool dumpRangeStats
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Enable caching", Description="Caches realtime found OR's for future re-display (good for accurate use on higher time-frame charts)", Order=2, GroupName="Advanced - Understand the implications!")]
+        public bool enableCaching
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Extension 1 % ( 0.5 is 50%)", Description="Adds extensions to the range. A double, for instance, 0.5 is 50%", Order=4, GroupName="Range Parameters")]
+        [NinjaScriptProperty]
+        public double Extension1
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Extension 1 points", Description="Adds extension in pioints to the range", Order=7, GroupName="Range Parameters")]
+        public double Extension1points
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Extension 2 %", Description="Adds extensions to the range. A double, for instance, 0.5 is 50%", Order=5, GroupName="Range Parameters")]
+        [NinjaScriptProperty]
+        public double Extension2
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Extension 3 %", Description="Adds extensions to the range. A double, for instance, 0.5 is 50%", Order=6, GroupName="Range Parameters")]
+        [NinjaScriptProperty]
+        public double Extension3
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Font size", Order=0, GroupName="General")]
+        public int fontsize
+        {
+            get;
+            set;
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public Series<double> h
+        {
+            get
+            {
+                return base.get_Values()[0];
+            }
+        }
+
+        [Display(Name="Hide until formed", Description="Hides the plots until range formed", Order=27, GroupName="Range Parameters")]
+        [NinjaScriptProperty]
+        public bool hideUntilFormed
+        {
+            get;
+            set;
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public Series<double> l
+        {
+            get
+            {
+                return base.get_Values()[1];
+            }
+        }
+
+        [Display(Name="Label prefix", Description="Additional line label prefix", Order=25, GroupName="Range Parameters")]
+        [NinjaScriptProperty]
+        public string Label
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Labels bar offset", Order=4, GroupName="Visual")]
+        public int LabelsBarOffset
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Line colours", Description="Line colour", GroupName="Visual", Order=1)]
+        [XmlIgnore]
+        public Brush Linecolor
+        {
+            get
+            {
+                return this.linecolor;
+            }
+            set
+            {
+                this.linecolor = value;
+            }
+        }
+
+        [Browsable(false)]
+        public string LinecolorSerialize
+        {
+            get
+            {
+                return Serialize.BrushToString(this.linecolor);
+            }
+            set
+            {
+                this.linecolor = Serialize.StringToBrush(value);
+            }
+        }
+
+        [Display(Name="Line width (thickness)", Order=3, GroupName="Visual")]
+        public int lineWidth
+        {
+            get;
+            set;
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public Series<double> m
+        {
+            get
+            {
+                return base.get_Values()[2];
+            }
+        }
+
+        [Display(Name="ORends (format:hhmmss)", Description="End time, e.g. 143000 - format is HHmmss", Order=2, GroupName="Range Parameters")]
+        [NinjaScriptProperty]
+        public double ORends
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Duration (in seconds - Optional)", Description="Range duration, in seconds (1 hour = 3600, 30 min = 1800, etc. Overides OREnds", Order=3, GroupName="Range Parameters")]
+        [NinjaScriptProperty]
+        public double ORendsDuration
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="ORstarts (format:hhmmss)", Description="Start time, e.g. 143000 - format is HHmmss", Order=1, GroupName="Range Parameters")]
+        [NinjaScriptProperty]
+        public double ORstarts
+        {
+            get;
+            set;
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public Series<double> pc
+        {
+            get
+            {
+                return base.get_Values()[3];
+            }
+        }
+
+        [Display(Name="Extension 1 % ( 0.5 is 50%)", Description="Adds extensions to the range. A double, for instance, 0.5 is 50%", Order=50, GroupName="OHLC - Prior session")]
+        public double PriorSession_Extension1
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Extension 2 %", Description="Adds extensions to the range. A double, for instance, 0.5 is 50%", Order=52, GroupName="OHLC - Prior session")]
+        public double PriorSession_Extension2
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Extension 3 %", Description="Adds extensions to the range. A double, for instance, 0.5 is 50%", Order=54, GroupName="OHLC - Prior session")]
+        public double PriorSession_Extension3
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Prior range retracements", Description="fib numbers for prior day retracements - Seperate values with comma - i.e. 50,61.8", Order=100, GroupName="OHLC - Prior session")]
+        public string PriorSession_retracements
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show range expansion extensions", Description="expansion range extensions added to current session open", Order=35, GroupName="OHLC - Prior session")]
+        public bool PriorSession_showAvgRangeExtension
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show range noise H/L", Description="marks the current expected upper and lower noise levels", Order=37, GroupName="OHLC - Prior session")]
+        public bool PriorSession_showAvgRangeNoise
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show Close", Description="Mark the closing price", Order=1, GroupName="OHLC - Prior session")]
+        public bool PriorSession_showClose
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show high", Description="Mark the session high", Order=5, GroupName="OHLC - Prior session")]
+        public bool PriorSession_showHigh
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show in current session only", Description="Only show prior session info in current session", Order=15, GroupName="OHLC - Prior session")]
+        public bool PriorSession_showInCurrentSessionOnly
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show low", Description="Mark the session low", Order=10, GroupName="OHLC - Prior session")]
+        public bool PriorSession_showLow
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show range projections", Description="shows todays projected range based on avg", Order=40, GroupName="OHLC - Prior session")]
+        public bool PriorSession_showProjectedRangeExtension
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show range statistics", Description="Show range stats in bottom left of panel", Order=30, GroupName="OHLC - Prior session")]
+        public bool PriorSession_showStats
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Product key", Order=3, GroupName="Licensing")]
+        [NinjaScriptProperty]
+        public string productKey
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="product SKU", Order=1, GroupName="Licensing")]
+        [ReadOnly(true)]
+        public string productSKU
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="product version", Order=2, GroupName="Licensing")]
+        [ReadOnly(true)]
+        public string productVersion
+        {
+            get;
+            set;
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public Series<double> RangeExtension1d
+        {
+            get
+            {
+                return this.RExtension1d;
+            }
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public Series<double> RangeExtension1u
+        {
+            get
+            {
+                return this.RExtension1u;
+            }
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public Series<double> RangeExtension2d
+        {
+            get
+            {
+                return this.RExtension2d;
+            }
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public Series<double> RangeExtension2u
+        {
+            get
+            {
+                return this.RExtension2u;
+            }
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public Series<double> RangeExtension3d
+        {
+            get
+            {
+                return this.RExtension3d;
+            }
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public Series<double> RangeExtension3u
+        {
+            get
+            {
+                return this.RExtension3u;
+            }
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public Series<double> RangeHigh
+        {
+            get
+            {
+                return this.RHigh;
+            }
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public Series<double> RangeLow
+        {
+            get
+            {
+                return this.RLow;
+            }
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public Series<double> RangeMid
+        {
+            get
+            {
+                return this.RMid;
+            }
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public double RangePercentComplete
+        {
+            get
+            {
+                return this.percentComplete;
+            }
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public double RangeProjectedHigh
+        {
+            get
+            {
+                return this.CurrentSession_Low + this.daily_range_avg;
+            }
+        }
+
+        [Browsable(false)]
+        [XmlIgnore]
+        public double RangeProjectedLow
+        {
+            get
+            {
+                return this.CurrentSession_High - this.daily_range_avg;
+            }
+        }
+
+        [Display(Name="Shade colour", Description="Fill opening range with this colour", GroupName="Visual", Order=3)]
+        [XmlIgnore]
+        public Brush Shadecolor
+        {
+            get
+            {
+                return this.shadecolor;
+            }
+            set
+            {
+                this.shadecolor = value;
+            }
+        }
+
+        [Browsable(false)]
+        public string ShadecolorSerialize
+        {
+            get
+            {
+                return Serialize.BrushToString(this.shadecolor);
+            }
+            set
+            {
+                this.Shadecolor = Serialize.StringToBrush(value);
+            }
+        }
+
+        [Display(Name="Shading Opacity", Order=6, GroupName="Visual")]
+        public int shadeOpacity
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="short line only", Order=4, GroupName="Visual")]
+        public bool shortLineOnly
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show numbers as ticks/pips, instead of points", Description="", Order=10, GroupName="General")]
+        public bool showasTicksPips
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show High & Low", Description="Shows the high and low lines", Order=8, GroupName="Range Parameters")]
+        [NinjaScriptProperty]
+        public bool ShowHighLow
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show mid point", Description="Adds midpoint marker", Order=9, GroupName="Range Parameters")]
+        [NinjaScriptProperty]
+        public bool ShowMidPoint
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show price label", Description="Adds price to label", Order=19, GroupName="Range Parameters")]
+        [NinjaScriptProperty]
+        public bool ShowPrice
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show close", Description="Marks the range close", Order=11, GroupName="Range Parameters")]
+        [NinjaScriptProperty]
+        public bool ShowRangeClose
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show range size label", Description="Adds range size to label", Order=22, GroupName="Range Parameters")]
+        [NinjaScriptProperty]
+        public bool ShowRangeLabel
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show open", Description="Marks the range open", Order=10, GroupName="Range Parameters")]
+        [NinjaScriptProperty]
+        public bool ShowRangeOpen
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show range Open/Close label", Description="Adds range open/close to label", Order=23, GroupName="Range Parameters")]
+        [NinjaScriptProperty]
+        public bool ShowRangeOpenCloseLabel
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Show status", Description="on chart label for debugging, etc.", Order=8, GroupName="General")]
+        public bool showStatus
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Noise range style", Description="Style options for plots", Order=38, GroupName="OHLC - Prior session")]
+        public Stroke StrokeNoise
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Text Opacity", Order=5, GroupName="Visual")]
+        public int textOpacity
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="timesFromMktData", Description="Get time from last mkt data tick, not local clock (Indicator must be set to 'OnEachTick' which may be more CPU intensive)", Order=1, GroupName="Advanced - Understand the implications!")]
+        [NinjaScriptProperty]
+        public bool timesFromMktData
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Uses a seperate data series", Description="Adds a 1 minute 24x7 data series and uses that for calculations", Order=8, GroupName="General")]
+        [NinjaScriptProperty]
+        public bool use24x7dataseries
+        {
+            get;
+            set;
+        }
+
+        [Display(Name="Time template for above", Description="The ninjatrader time template to be used for the additional data series", Order=9, GroupName="General")]
+        public string use24x7dataseriesTT
+        {
+            get;
+            set;
+        }
+
+        public pjsOpeningRangeV2()
+        {
+        }
+
+        private bool check_license()
+        {
+            bool flag;
+            string empty = string.Empty;
+            if (this.productKey == "")
+            {
+                try
+                {
+                    string[] miD = new string[] { this.MiD, "|", this.productSKU, "|", this.productKey, "|", this.productVersion };
+                    WebRequest webRequest = WebRequest.Create(string.Concat("https://pjsmith.me.uk/licensing/generate_serialnumber.php?e=", WebUtility.UrlEncode(string.Concat(miD))));
+                    using (StreamReader streamReader = new StreamReader(webRequest.GetResponse().GetResponseStream()))
+                    {
+                        empty = streamReader.ReadToEnd();
+                    }
+                    this.productKey = empty.Trim();
+                }
+                catch
+                {
+                    flag = false;
+                    return flag;
+                }
+            }
+            string[] strArrays = new string[] { this.MiD, "|", this.productSKU, "|", this.productKey, "|", this.productVersion };
+            string str = string.Concat(strArrays);
+            string str1 = "Cvt#@9]W=Z]zK~SY";
+            SHA256 sHA256 = SHA256.Create();
+            byte[] numArray = sHA256.ComputeHash(Encoding.ASCII.GetBytes(str1));
+            byte[] numArray1 = new byte[] { 7, 0, 0, 20, 0, 50, 0, 8, 0, 34, 17, 0, 4, 9, 50, 0 };
+            string str2 = this.EncryptString(str, numArray, numArray1);
+            empty = string.Empty;
+            bool flag1 = false;
+            try
+            {
+                if (!File.Exists(string.Concat(Globals.get_UserDataDir(), this.productKey, ".lic")) || !(File.GetLastWriteTime(string.Concat(Globals.get_UserDataDir(), this.productKey, ".lic")).AddMinutes(60) > DateTime.Now))
+                {
+                    WebRequest webRequest1 = WebRequest.Create(string.Concat("https://pjsmith.me.uk/licensing/lic.php?estring=", WebUtility.UrlEncode(str2)));
+                    using (StreamReader streamReader1 = new StreamReader(webRequest1.GetResponse().GetResponseStream()))
+                    {
+                        empty = streamReader1.ReadToEnd();
+                    }
+                }
+                else
+                {
+                    try
+                    {
+                        empty = File.ReadAllText(string.Concat(Globals.get_UserDataDir(), this.productKey, ".lic"));
+                        base.Print("OR:Cached copy");
+                        flag1 = true;
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+            catch
+            {
+                if (File.Exists(string.Concat(Globals.get_UserDataDir(), this.productKey, ".lic")))
+                {
+                    try
+                    {
+                        empty = File.ReadAllText(string.Concat(Globals.get_UserDataDir(), this.productKey, ".lic"));
+                        base.Print("OR:Cached copy");
+                        flag1 = true;
+                    }
+                    catch
+                    {
+                        flag = false;
+                        return flag;
+                    }
+                }
+            }
+            string str3 = this.DecryptString(empty, numArray, numArray1);
+            string[] strArrays1 = str3.Split(new char[] { '|' });
+            if (flag1 || !str3.Contains("ACTIVATED") || !(DateTime.Now.ToUniversalTime() < DateTime.Parse(strArrays1[2])) || !(this.MiD == strArrays1[1]))
+            {
+                if (flag1 && str3.Contains("ACTIVATED") && DateTime.Now.ToUniversalTime() < DateTime.Parse(strArrays1[2]) && this.MiD == strArrays1[1])
+                {
+                    return true;
+                }
+                return false;
+            }
+            base.Print("Already Activated");
+            try
+            {
+                for (int i = 1; i < 5; i++)
+                {
+                    try
+                    {
+                        File.WriteAllText(string.Concat(Globals.get_UserDataDir(), this.productKey, ".lic"), empty);
+                        i = 10;
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+            catch
+            {
+            }
+            return true;
+        }
+
+        public string DecryptString(string cipherText, byte[] key, byte[] iv)
+        {
+            Aes ae = Aes.Create();
+            ae.Mode = CipherMode.CBC;
+            byte[] numArray = new byte[32];
+            Array.Copy(key, 0, numArray, 0, 32);
+            ae.Key = numArray;
+            ae.IV = iv;
+            MemoryStream memoryStream = new MemoryStream();
+            CryptoStream cryptoStream = new CryptoStream(memoryStream, ae.CreateDecryptor(), CryptoStreamMode.Write);
+            string empty = string.Empty;
+            try
+            {
+                byte[] numArray1 = Convert.FromBase64String(cipherText);
+                cryptoStream.Write(numArray1, 0, (int)numArray1.Length);
+                cryptoStream.FlushFinalBlock();
+                byte[] array = memoryStream.ToArray();
+                empty = Encoding.ASCII.GetString(array, 0, (int)array.Length);
+            }
+            finally
+            {
+                memoryStream.Close();
+                cryptoStream.Close();
+            }
+            return empty;
+        }
+
+        public string EncryptString(string plainText, byte[] key, byte[] iv)
+        {
+            Aes ae = Aes.Create();
+            ae.Mode = CipherMode.CBC;
+            byte[] numArray = new byte[32];
+            Array.Copy(key, 0, numArray, 0, 32);
+            ae.Key = numArray;
+            ae.IV = iv;
+            MemoryStream memoryStream = new MemoryStream();
+            CryptoStream cryptoStream = new CryptoStream(memoryStream, ae.CreateEncryptor(), CryptoStreamMode.Write);
+            byte[] bytes = Encoding.ASCII.GetBytes(plainText);
+            cryptoStream.Write(bytes, 0, (int)bytes.Length);
+            cryptoStream.FlushFinalBlock();
+            byte[] array = memoryStream.ToArray();
+            memoryStream.Close();
+            cryptoStream.Close();
+            return Convert.ToBase64String(array, 0, (int)array.Length);
+        }
+
+        protected override void OnBarUpdate()
+        {
+            string[] shortDateString;
+            DateTime item;
+            string[] upper;
+            double oRstarts;
+            int barsInProgress;
+            string str;
+            string str1;
+            string str2;
+            string str3;
+            string str4;
+            string str5;
+            string str6;
+            string str7;
+            string str8;
+            string str9;
+            string str10;
+            string str11;
+            string str12;
+            string str13;
+            string str14;
+            string str15;
+            string str16;
+            string str17;
+            string str18;
+            string str19;
+            string str20;
+            string str21;
+            string str22;
+            string str23;
+            string str24;
+            string str25;
+            string str26;
+            string str27;
+            string str28;
+            string str29;
+            string str30;
+            string str31;
+            string str32;
+            string str33;
+            string str34;
+            if (!this.prodEn)
+            {
+                return;
+            }
+            if (base.get_CurrentBars()[0] < 0 || this.use24x7dataseries && base.get_CurrentBars()[1] < 0)
+            {
+                return;
+            }
+            if (this.timesFromMktData)
+            {
+                this.mktTime = base.get_Times()[this.ds].get_Item(0);
+            }
+            if (base.get_BarsInProgress() == 0 && base.get_Bars().get_IsFirstBarOfSession())
+            {
+                this.firstBarOfSession = base.get_CurrentBar();
+            }
+            if ((!this.use24x7dataseries && base.get_BarsInProgress() == 0 && base.get_Bars().get_IsFirstBarOfSession() || this.use24x7dataseries && base.get_BarsInProgress() == 1 && base.get_Bars().get_IsFirstBarOfSession()) && base.get_IsFirstTickOfBar())
+            {
+                this.barHigh = double.MaxValue;
+                this.barLow = double.MinValue;
+                this.sessionCounter++;
+                this.PriorSession_High = this.CurrentSession_High;
+                this.PriorSession_Low = this.CurrentSession_Low;
+                this.PriorSession_Open = this.CurrentSession_Open;
+                this.PriorSession_Close = this.CurrentSession_Close;
+                if (this.CurrentSession != null)
+                {
+                    this.Sessions[this.sessionCounter] = this.CurrentSession;
+                }
+                this.CurrentSession = new pjsOpeningRangeV2.Session()
+                {
+                    date = base.get_Time().get_Item(0)
+                };
+                this.updateSession(this.CurrentSession);
+                if (this.daily_ranges.Count <= 0 || !this.daily_ranges.ContainsKey(this.sessionCounter - 1))
+                {
+                    this.daily_ranges.Add(this.sessionCounter - 1, this.PriorSession_High - this.PriorSession_Low);
+                    this.daily_expansion.Add(this.sessionCounter - 1, Math.Max(this.PriorSession_High - this.PriorSession_Open, this.PriorSession_Open - this.PriorSession_Low));
+                    this.daily_noise.Add(this.sessionCounter - 1, Math.Min(this.PriorSession_High - this.PriorSession_Open, this.PriorSession_Open - this.PriorSession_Low));
+                }
+                else
+                {
+                    this.daily_ranges[this.sessionCounter - 1] = this.PriorSession_High - this.PriorSession_Low;
+                    this.daily_expansion[this.sessionCounter - 1] = Math.Max(this.PriorSession_High - this.PriorSession_Open, this.PriorSession_Open - this.PriorSession_Low);
+                    this.daily_noise[this.sessionCounter - 1] = Math.Min(this.PriorSession_High - this.PriorSession_Open, this.PriorSession_Open - this.PriorSession_Low);
+                }
+                int weekOfYear = DateTimeFormatInfo.CurrentInfo.Calendar.GetWeekOfYear(base.get_Time().get_Item(0), CalendarWeekRule.FirstFourDayWeek, DayOfWeek.Sunday);
+                if (this.weekNumberLast != weekOfYear)
+                {
+                    this.weekCounter++;
+                    this.weekNumberLast = weekOfYear;
+                }
+                if (this.weekly_ranges.Count <= 0 || !this.weekly_ranges.ContainsKey(this.weekCounter))
+                {
+                    this.PriorWeek_Close = this.CurrentWeek_Close;
+                    this.PriorWeek_High = this.CurrentWeek_High;
+                    this.PriorWeek_Open = this.CurrentWeek_Open;
+                    this.PriorWeek_Low = this.CurrentWeek_Low;
+                    this.firstBarOfWeek = base.get_CurrentBar();
+                    this.CurrentWeek_Open = base.get_Open().get_Item(0);
+                    this.CurrentWeek_Close = base.get_Close().get_Item(0);
+                    this.CurrentWeek_High = base.get_High().get_Item(0);
+                    this.CurrentWeek_Low = base.get_Low().get_Item(0);
+                    this.weekly_ranges.Add(this.weekCounter, this.CurrentWeek_High - this.CurrentWeek_Low);
+                    this.weekly_expansion.Add(this.weekCounter, Math.Max(this.CurrentWeek_High - this.CurrentWeek_Open, this.CurrentWeek_Open - this.CurrentWeek_Low));
+                    this.weekly_noise.Add(this.weekCounter, Math.Min(this.CurrentWeek_High - this.CurrentWeek_Open, this.CurrentWeek_Open - this.CurrentWeek_Low));
+                }
+                else
+                {
+                    this.CurrentWeek_High = Math.Max(this.CurrentWeek_High, this.CurrentSession_High);
+                    this.CurrentWeek_Low = Math.Min(this.CurrentWeek_Low, this.CurrentSession_Low);
+                    this.CurrentWeek_Close = this.CurrentSession_Close;
+                    this.weekly_ranges[this.weekCounter] = this.CurrentWeek_High - this.CurrentWeek_Low;
+                    this.weekly_expansion[this.weekCounter] = Math.Max(this.CurrentSession_High - this.CurrentWeek_Open, this.CurrentWeek_Open - this.CurrentWeek_Low);
+                    this.weekly_noise[this.weekCounter] = Math.Min(this.CurrentSession_High - this.CurrentWeek_Open, this.CurrentWeek_Open - this.CurrentWeek_Low);
+                }
+                this.CurrentSession_High = base.get_High().get_Item(0);
+                this.CurrentSession_Low = base.get_Low().get_Item(0);
+                this.CurrentSession_Open = base.get_Open().get_Item(0);
+                this.CurrentSession_Close = base.get_Close().get_Item(0);
+            }
+            if ((!this.use24x7dataseries && base.get_BarsInProgress() == 0 || this.use24x7dataseries && base.get_BarsInProgress() == 1) && this.sessionCounter > 0)
+            {
+                this.CurrentSession_High = Math.Max(this.CurrentSession_High, base.get_High().get_Item(0));
+                this.CurrentSession_Low = Math.Min(this.CurrentSession_Low, base.get_Low().get_Item(0));
+                this.CurrentSession_Close = base.get_Close().get_Item(0);
+                this.CurrentWeek_High = Math.Max(this.CurrentWeek_High, this.CurrentSession_High);
+                this.CurrentWeek_Low = Math.Min(this.CurrentWeek_Low, this.CurrentSession_Low);
+                this.CurrentWeek_Close = this.CurrentSession_Close;
+            }
+            if (this.ORendsDuration > 0)
+            {
+                if (!this.timesSet)
+                {
+                    this.remaining_time = (int)this.ORstarts;
+                    int remainingTime = this.remaining_time / 10000;
+                    pjsOpeningRangeV2 _pjsOpeningRangeV2 = this;
+                    _pjsOpeningRangeV2.remaining_time = _pjsOpeningRangeV2.remaining_time - remainingTime * 10000;
+                    int num = this.remaining_time / 100;
+                    pjsOpeningRangeV2 remainingTime1 = this;
+                    remainingTime1.remaining_time = remainingTime1.remaining_time - num * 100;
+                    int num1 = this.remaining_time;
+                    shortDateString = new string[7];
+                    item = base.get_Times()[this.ds].get_Item(0);
+                    shortDateString[0] = item.ToShortDateString();
+                    shortDateString[1] = " ";
+                    shortDateString[2] = remainingTime.ToString("#0");
+                    shortDateString[3] = ":";
+                    shortDateString[4] = num.ToString("#0");
+                    shortDateString[5] = ":";
+                    shortDateString[6] = num1.ToString("#0");
+                    this.startTime = DateTime.Parse(string.Concat(shortDateString));
+                    this.endTime = this.startTime.AddSeconds(this.ORendsDuration);
+                    if (base.get_Times()[this.ds].get_Item(0) > this.endTime)
+                    {
+                        this.startTime = this.startTime.AddDays(1);
+                        this.endTime = this.endTime.AddDays(1);
+                    }
+                    this.timesSet = true;
+                }
+                if (base.get_Times()[this.ds].get_Item(0) > this.endTime && !this.started)
+                {
+                    this.startTime = this.startTime.AddDays(1);
+                    this.endTime = this.endTime.AddDays(1);
+                }
+            }
+            if (this.drawToEndOfSession && !this.use24x7dataseries && base.get_BarsInProgress() == 0 && base.get_Bars().get_IsFirstBarOfSession() || this.use24x7dataseries && base.get_BarsInProgress() == 1 && base.get_Bars().get_IsFirstBarOfSession() && !this.started && base.get_IsFirstTickOfBar())
+            {
+                this.highestPrice = double.MinValue;
+                this.LowestPrice = double.MaxValue;
+                this.started = false;
+                this.lines = new string[0];
+            }
+            if (this.ORendsDuration == 0 && (base.get_State() == 5 && (double)NinjaScriptBase.ToTime(base.get_Times()[this.ds].get_Item(0)) >= this.ORstarts && (double)NinjaScriptBase.ToTime(base.get_Times()[this.ds].get_Item(0)) < this.ORends && !this.started || !this.timesFromMktData && base.get_State() == 7 && Convert.ToDouble(DateTime.Now.ToString("HHmmss")) >= this.ORstarts && Convert.ToDouble(DateTime.Now.ToString("HHmmss")) < this.ORends && !this.started || this.timesFromMktData && base.get_State() == 7 && Convert.ToDouble(this.mktTime.ToString("HHmmss")) >= this.ORstarts && Convert.ToDouble(this.mktTime.ToString("HHmmss")) < this.ORends && !this.started) || this.ORendsDuration > 0 && base.get_State() == 5 && base.get_Times()[this.ds].get_Item(0) >= this.startTime && base.get_Times()[this.ds].get_Item(0) < this.endTime && !this.started || !this.timesFromMktData && base.get_State() == 7 && DateTime.Now >= this.startTime && DateTime.Now < this.endTime && !this.started || this.timesFromMktData && base.get_State() == 7 && this.mktTime >= this.startTime && this.mktTime < this.endTime && !this.started)
+            {
+                if (base.get_State() == 7 && !this.started)
+                {
+                    upper = new string[] { "OR:", base.get_Instrument().get_FullName().ToUpper(), " OR ", this.Label, " starting now @ ", null, null, null, null, null };
+                    upper[5] = DateTime.Now.ToString("HHmmss");
+                    upper[6] = " / ";
+                    DateTime dateTime = base.get_Times()[this.ds].get_Item(0);
+                    upper[7] = dateTime.ToLongDateString();
+                    upper[8] = " / skiphl = ";
+                    upper[9] = this.skiphl.ToString();
+                    base.Print(string.Concat(upper));
+                    string[] longDateString = new string[] { "OR:", base.get_Instrument().get_FullName().ToUpper(), " OR ", this.Label, " starting now @ ", null, null, null };
+                    longDateString[5] = DateTime.Now.ToString("HHmmss");
+                    longDateString[6] = " / ";
+                    DateTime item1 = base.get_Times()[this.ds].get_Item(0);
+                    longDateString[7] = item1.ToLongDateString();
+                    NinjaScript.Log(string.Concat(longDateString), 1);
+                }
+                this.started = true;
+                this.skiphl = false;
+                this.RangeOpen = base.get_Close().get_Item(0);
+                this.openingbar = base.get_CurrentBars()[0];
+                this.openingTime = base.get_Times()[this.ds].get_Item(0);
+                this.CurrentSession.range_open_price = base.get_Close().get_Item(0);
+                if (base.get_State() != 5)
+                {
+                    this.highestPrice = double.MinValue;
+                    this.LowestPrice = double.MaxValue;
+                }
+                else
+                {
+                    try
+                    {
+                        if (this.enableCaching)
+                        {
+                            string[] userDataDir = new string[] { Globals.get_UserDataDir(), "OR.", base.get_Instrument().get_FullName().ToUpper(), ".", null, null, null, null, null, null, null, null };
+                            DateTime dateTime1 = base.get_Times()[this.ds].get_Item(0);
+                            userDataDir[4] = dateTime1.Date.ToString("yyyyMMdd");
+                            userDataDir[5] = ".";
+                            oRstarts = this.ORstarts;
+                            userDataDir[6] = oRstarts.ToString();
+                            userDataDir[7] = ".";
+                            userDataDir[8] = this.ORends.ToString();
+                            userDataDir[9] = ".";
+                            userDataDir[10] = this.ORendsDuration.ToString();
+                            userDataDir[11] = ".txt";
+                            if (!File.Exists(string.Concat(userDataDir)))
+                            {
+                                goto Label1;
+                            }
+                            if (this.showStatus)
+                            {
+                                string[] strArrays = new string[17];
+                                strArrays[0] = "OR:BIP=";
+                                barsInProgress = base.get_BarsInProgress();
+                                strArrays[1] = barsInProgress.ToString();
+                                strArrays[2] = " CB=";
+                                strArrays[3] = base.get_CurrentBar().ToString();
+                                strArrays[4] = "  Attempting read of ";
+                                strArrays[5] = Globals.get_UserDataDir();
+                                strArrays[6] = "OR.";
+                                strArrays[7] = base.get_Instrument().get_FullName().ToUpper();
+                                strArrays[8] = ".";
+                                DateTime item2 = base.get_Times()[this.ds].get_Item(0);
+                                strArrays[9] = item2.Date.ToString("yyyyMMdd");
+                                strArrays[10] = ".";
+                                strArrays[11] = this.ORstarts.ToString();
+                                strArrays[12] = ".";
+                                strArrays[13] = this.ORends.ToString();
+                                strArrays[14] = ".";
+                                strArrays[15] = this.ORendsDuration.ToString();
+                                strArrays[16] = ".txt";
+                                NinjaScript.Log(string.Concat(strArrays), 1);
+                            }
+                            string[] userDataDir1 = new string[] { Globals.get_UserDataDir(), "OR.", base.get_Instrument().get_FullName().ToUpper(), ".", null, null, null, null, null, null, null, null };
+                            DateTime dateTime2 = base.get_Times()[this.ds].get_Item(0);
+                            userDataDir1[4] = dateTime2.Date.ToString("yyyyMMdd");
+                            userDataDir1[5] = ".";
+                            userDataDir1[6] = this.ORstarts.ToString();
+                            userDataDir1[7] = ".";
+                            userDataDir1[8] = this.ORends.ToString();
+                            userDataDir1[9] = ".";
+                            userDataDir1[10] = this.ORendsDuration.ToString();
+                            userDataDir1[11] = ".txt";
+                            this.lines = File.ReadAllLines(string.Concat(userDataDir1));
+                            this.highestPrice = Convert.ToDouble(this.lines[0]);
+                            this.LowestPrice = Convert.ToDouble(this.lines[1]);
+                            if (this.showStatus)
+                            {
+                                string[] label = new string[] { "OR:", this.Label, ":Using cached OR - ", base.get_Instrument().get_FullName().ToUpper(), ".", null, null, null, null, null, null, null };
+                                DateTime item3 = base.get_Times()[this.ds].get_Item(0);
+                                label[5] = item3.Date.ToString("yyyyMMdd");
+                                label[6] = ".";
+                                label[7] = this.ORstarts.ToString();
+                                label[8] = ".";
+                                label[9] = this.ORends.ToString();
+                                label[10] = ".";
+                                label[11] = this.ORendsDuration.ToString();
+                                base.Print(string.Concat(label));
+                            }
+                            if (this.showStatus)
+                            {
+                                string[] upper1 = new string[] { "OR:Using cached OR - ", base.get_Instrument().get_FullName().ToUpper(), ".", null, null, null, null, null, null, null };
+                                DateTime dateTime3 = base.get_Times()[this.ds].get_Item(0);
+                                upper1[3] = dateTime3.Date.ToString("yyyyMMdd");
+                                upper1[4] = ".";
+                                upper1[5] = this.ORstarts.ToString();
+                                upper1[6] = ".";
+                                upper1[7] = this.ORends.ToString();
+                                upper1[8] = ".";
+                                upper1[9] = this.ORendsDuration.ToString();
+                                NinjaScript.Log(string.Concat(upper1), 1);
+                            }
+                            this.skiphl = true;
+                            goto Label0;
+                        }
+                    Label1:
+                        this.highestPrice = double.MinValue;
+                        this.LowestPrice = double.MaxValue;
+                        this.lines = new string[0];
+                        this.skiphl = false;
+                    Label0:
+                    }
+                    catch (Exception exception1)
+                    {
+                        Exception exception = exception1;
+                        this.highestPrice = double.MinValue;
+                        this.LowestPrice = double.MaxValue;
+                        this.lines = new string[0];
+                        this.skiphl = false;
+                        if (this.showStatus)
+                        {
+                            NinjaScript.Log(string.Concat("OR:Cached OR not found - ", exception.Message), 1);
+                        }
+                        if (this.showStatus)
+                        {
+                            base.Print(string.Concat("OR:", this.Label, ":Cached OR not found"));
+                        }
+                    }
+                }
+            }
+            if (this.started && !this.skiphl)
+            {
+                this.LowestPrice = Math.Min(this.LowestPrice, base.get_Lows()[this.ds].get_Item(0));
+                this.highestPrice = Math.Max(this.highestPrice, base.get_Highs()[this.ds].get_Item(0));
+            }
+            if (this.ORendsDuration == 0 && (base.get_State() == 5 && (double)NinjaScriptBase.ToTime(base.get_Times()[this.ds].get_Item(0)) >= this.ORends && this.started || base.get_IsFirstTickOfBar() && this.highestPrice > 0 || !this.timesFromMktData && base.get_State() == 7 && Convert.ToDouble(DateTime.Now.ToString("HHmmss")) >= this.ORends && this.started || this.timesFromMktData && base.get_State() == 7 && Convert.ToDouble(this.mktTime.ToString("HHmmss")) >= this.ORends && this.started || base.get_IsFirstTickOfBar() && this.highestPrice > 0) || this.ORendsDuration > 0 && (base.get_State() == 5 && base.get_Times()[this.ds].get_Item(0) >= this.endTime && this.started || base.get_IsFirstTickOfBar() && this.highestPrice > 0 || !this.timesFromMktData && base.get_State() == 7 && DateTime.Now >= this.endTime && this.started || this.timesFromMktData && base.get_State() == 7 && this.mktTime >= this.endTime && this.started || base.get_IsFirstTickOfBar() && this.highestPrice > 0))
+            {
+                if (this.ORendsDuration == 0 && (base.get_State() == 5 && (double)NinjaScriptBase.ToTime(base.get_Times()[this.ds].get_Item(0)) >= this.ORends && this.started || !this.timesFromMktData && base.get_State() == 7 && Convert.ToDouble(DateTime.Now.ToString("HHmmss")) >= this.ORends && this.started || this.timesFromMktData && base.get_State() == 7 && Convert.ToDouble(this.mktTime.ToString("HHmmss")) >= this.ORends && this.started) || this.ORendsDuration > 0 && (base.get_State() == 5 && base.get_Times()[this.ds].get_Item(0) >= this.endTime && this.started || !this.timesFromMktData && base.get_State() == 7 && DateTime.Now >= this.endTime && this.started || this.timesFromMktData && base.get_State() == 7 && this.mktTime >= this.endTime && this.started))
+                {
+                    this.skiphl = false;
+                    this.started = false;
+                    this.RangeClose = base.get_Close().get_Item(0);
+                    this.CurrentSession.range_close_price = base.get_Close().get_Item(0);
+                    this.lines = new string[0];
+                    if (base.get_State() == 7)
+                    {
+                        string[] longDateString1 = new string[] { "OR:", base.get_Instrument().get_FullName().ToUpper(), " OR ", this.Label, " Ended now @ ", null, null, null };
+                        longDateString1[5] = DateTime.Now.ToString("HHmmss");
+                        longDateString1[6] = " / ";
+                        DateTime item4 = base.get_Times()[this.ds].get_Item(0);
+                        longDateString1[7] = item4.ToLongDateString();
+                        base.Print(string.Concat(longDateString1));
+                        string[] strArrays1 = new string[] { "OR:", base.get_Instrument().get_FullName().ToUpper(), " OR ", this.Label, " Ended now @ ", null, null, null };
+                        strArrays1[5] = DateTime.Now.ToString("HHmmss");
+                        strArrays1[6] = " / ";
+                        DateTime dateTime4 = base.get_Times()[this.ds].get_Item(0);
+                        strArrays1[7] = dateTime4.ToLongDateString();
+                        NinjaScript.Log(string.Concat(strArrays1), 1);
+                    }
+                    if (this.ORendsDuration > 0)
+                    {
+                        this.startTime = this.startTime.AddDays(1);
+                        this.endTime = this.endTime.AddDays(1);
+                    }
+                    if (base.get_State() == 7)
+                    {
+                        try
+                        {
+                            shortDateString = new string[] { "OR:Attempting write of ", Globals.get_UserDataDir(), "OR.", base.get_Instrument().get_FullName().ToUpper(), ".", null, null, null, null, null, null, null, null };
+                            item = this.openingTime.Date;
+                            shortDateString[5] = item.ToString("yyyyMMdd");
+                            shortDateString[6] = ".";
+                            oRstarts = this.ORstarts;
+                            shortDateString[7] = oRstarts.ToString();
+                            shortDateString[8] = ".";
+                            oRstarts = this.ORends;
+                            shortDateString[9] = oRstarts.ToString();
+                            shortDateString[10] = ".";
+                            oRstarts = this.ORendsDuration;
+                            shortDateString[11] = oRstarts.ToString();
+                            shortDateString[12] = ".txt";
+                            NinjaScript.Log(string.Concat(shortDateString), 1);
+                            shortDateString = new string[] { Globals.get_UserDataDir(), "OR.", base.get_Instrument().get_FullName().ToUpper(), ".", null, null, null, null, null, null, null, null };
+                            item = this.openingTime.Date;
+                            shortDateString[4] = item.ToString("yyyyMMdd");
+                            shortDateString[5] = ".";
+                            oRstarts = this.ORstarts;
+                            shortDateString[6] = oRstarts.ToString();
+                            shortDateString[7] = ".";
+                            oRstarts = this.ORends;
+                            shortDateString[8] = oRstarts.ToString();
+                            shortDateString[9] = ".";
+                            oRstarts = this.ORendsDuration;
+                            shortDateString[10] = oRstarts.ToString();
+                            shortDateString[11] = ".txt";
+                            File.WriteAllText(string.Concat(shortDateString), string.Concat(this.highestPrice.ToString(), "\r\n", this.LowestPrice.ToString(), "\r\n"));
+                        }
+                        catch (Exception exception3)
+                        {
+                            Exception exception2 = exception3;
+                            NinjaScript.Log(string.Concat("OR:Could not write OR data to temp file ", exception2.Message.ToString()), 1);
+                        }
+                    }
+                }
+                int currentBars = base.get_CurrentBars()[0] - this.openingbar;
+                if (this.shortLineOnly)
+                {
+                    currentBars = Math.Min(base.get_CurrentBar(), 12);
+                }
+                if (base.get_BarsInProgress() == 0)
+                {
+                    this.RHigh.set_Item(0, this.highestPrice);
+                    this.RLow.set_Item(0, this.LowestPrice);
+                    if (this.ShowRangeOpen)
+                    {
+                        string str35 = this.ORstarts.ToString();
+                        oRstarts = this.ORends;
+                        Draw.Text(this, string.Concat("pjsORStRO", str35, oRstarts.ToString(), this.openingbar.ToString()), this.autoScale, string.Concat(this.Label, " O", (this.ShowPrice ? string.Concat(" ", this.RangeOpen.ToString()) : ""), (this.started ? " (p)" : "")), 0, this.RangeOpen, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        string str36 = this.ORstarts.ToString();
+                        oRstarts = this.ORends;
+                        Draw.Line(this, string.Concat("pjsORSRO", str36, oRstarts.ToString(), this.openingbar.ToString()), this.autoScale, currentBars, this.RangeOpen, 0, this.RangeOpen, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.ShowRangeClose)
+                    {
+                        base.Print(this.RangeClose);
+                        string str37 = this.ORstarts.ToString();
+                        oRstarts = this.ORends;
+                        Draw.Text(this, string.Concat("pjsORStRC", str37, oRstarts.ToString(), this.openingbar.ToString()), this.autoScale, string.Concat(this.Label, " C", (this.ShowPrice ? string.Concat(" ", this.RangeClose.ToString()) : ""), (this.started ? " (p)" : "")), 0, this.RangeClose, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        string str38 = this.ORstarts.ToString();
+                        oRstarts = this.ORends;
+                        Draw.Line(this, string.Concat("pjsORSRC", str38, oRstarts.ToString(), this.openingbar.ToString()), this.autoScale, currentBars, this.RangeClose, 0, this.RangeClose, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.ShowHighLow)
+                    {
+                        if (base.get_CurrentBar() == 0 || this.LowestPrice < this.LowestPriceLast || base.get_IsFirstTickOfBar())
+                        {
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                string str39 = this.ORstarts.ToString();
+                                oRstarts = this.ORends;
+                                string str40 = string.Concat("pjsORSt", str39, oRstarts.ToString(), this.openingbar.ToString());
+                                bool flag = this.autoScale;
+                                shortDateString = new string[] { this.Label, " L", null, null, null, null };
+                                shortDateString[2] = (this.ShowRangeOpenCloseLabel ? string.Concat(" O=", this.RangeOpen.ToString(), " C=", this.RangeClose.ToString()) : "");
+                                string[] strArrays2 = shortDateString;
+                                if (this.ShowRangeLabel)
+                                {
+                                    oRstarts = this.highestPrice - this.LowestPrice;
+                                    str34 = string.Concat(" R=", oRstarts.ToString());
+                                }
+                                else
+                                {
+                                    str34 = "";
+                                }
+                                strArrays2[3] = str34;
+                                shortDateString[4] = (this.ShowPrice ? string.Concat(" ", this.LowestPrice.ToString()) : "");
+                                shortDateString[5] = (this.started ? " (p)" : "");
+                                Draw.Text(this, str40, flag, string.Concat(shortDateString), 0, this.LowestPrice, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                            }
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                string str41 = this.ORstarts.ToString();
+                                oRstarts = this.ORends;
+                                Draw.Line(this, string.Concat("pjsORS", str41, oRstarts.ToString(), this.openingbar.ToString()), this.autoScale, currentBars, this.LowestPrice, 0, this.LowestPrice, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                            }
+                        }
+                        if (base.get_CurrentBar() == 0 || this.highestPrice > this.highestPriceLast || base.get_IsFirstTickOfBar())
+                        {
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                string str42 = this.ORstarts.ToString();
+                                oRstarts = this.ORends;
+                                Draw.Text(this, string.Concat("pjsOREt", str42, oRstarts.ToString(), this.openingbar.ToString()), this.autoScale, string.Concat(this.Label, " H", (this.ShowPrice ? string.Concat(" ", this.highestPrice.ToString()) : ""), (this.started ? " (p)" : "")), 0, this.highestPrice, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                            }
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                string str43 = this.ORstarts.ToString();
+                                oRstarts = this.ORends;
+                                Draw.Line(this, string.Concat("pjsORE", str43, oRstarts.ToString(), this.openingbar.ToString()), this.autoScale, currentBars, this.highestPrice, 0, this.highestPrice, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                            }
+                        }
+                    }
+                    if (this.shadecolor != Brushes.Transparent && (this.started && !this.hideUntilFormed || !this.started) && (base.get_CurrentBar() == 0 || this.RHigh.get_Item(0) != this.RHigh.get_Item(1) || this.RLow.get_Item(0) != this.RLow.get_Item(1) || base.get_IsFirstTickOfBar()))
+                    {
+                        string str44 = this.ORstarts.ToString();
+                        oRstarts = this.ORends;
+                        Draw.Rectangle(this, string.Concat("pjsORshade", str44, oRstarts.ToString(), this.openingbar.ToString()), this.autoScale, base.get_CurrentBars()[0] - this.openingbar, this.LowestPrice, 0, this.highestPrice, Brushes.Transparent, this.shadecolor, this.shadeOpacity);
+                    }
+                    if (this.Extension1 > 0)
+                    {
+                        this.RExtension1u.set_Item(0, this.highestPrice + (this.highestPrice - this.LowestPrice) * this.Extension1);
+                        this.RExtension1d.set_Item(0, this.LowestPrice - (this.highestPrice - this.LowestPrice) * this.Extension1);
+                        if (base.get_CurrentBar() == 0 || this.RExtension1u.get_Item(0) != this.RExtension1u.get_Item(1) || this.RExtension1d.get_Item(0) != this.RExtension1d.get_Item(1) || base.get_IsFirstTickOfBar())
+                        {
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                shortDateString = new string[] { "pjsORSt", null, null, null, null, null };
+                                oRstarts = this.ORstarts;
+                                shortDateString[1] = oRstarts.ToString();
+                                oRstarts = this.ORends;
+                                shortDateString[2] = oRstarts.ToString();
+                                oRstarts = this.Extension1;
+                                shortDateString[3] = oRstarts.ToString();
+                                shortDateString[4] = ".";
+                                shortDateString[5] = this.openingbar.ToString();
+                                string str45 = string.Concat(shortDateString);
+                                bool flag1 = this.autoScale;
+                                string label1 = this.Label;
+                                string str46 = this.Extension1.ToString();
+                                if (this.ShowPrice)
+                                {
+                                    oRstarts = this.LowestPrice - (this.highestPrice - this.LowestPrice) * this.Extension1;
+                                    str33 = string.Concat(" ", oRstarts.ToString());
+                                }
+                                else
+                                {
+                                    str33 = "";
+                                }
+                                Draw.Text(this, str45, flag1, string.Concat(label1, " L x", str46, str33), 0, this.LowestPrice - (this.highestPrice - this.LowestPrice) * this.Extension1, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                            }
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                shortDateString = new string[] { "pjsOREt", null, null, null, null, null };
+                                oRstarts = this.ORstarts;
+                                shortDateString[1] = oRstarts.ToString();
+                                oRstarts = this.ORends;
+                                shortDateString[2] = oRstarts.ToString();
+                                oRstarts = this.Extension1;
+                                shortDateString[3] = oRstarts.ToString();
+                                shortDateString[4] = ".";
+                                shortDateString[5] = this.openingbar.ToString();
+                                string str47 = string.Concat(shortDateString);
+                                bool flag2 = this.autoScale;
+                                string label2 = this.Label;
+                                string str48 = this.Extension1.ToString();
+                                if (this.ShowPrice)
+                                {
+                                    oRstarts = this.highestPrice + (this.highestPrice - this.LowestPrice) * this.Extension1;
+                                    str32 = string.Concat(" ", oRstarts.ToString());
+                                }
+                                else
+                                {
+                                    str32 = "";
+                                }
+                                Draw.Text(this, str47, flag2, string.Concat(label2, " H x", str48, str32), 0, this.highestPrice + (this.highestPrice - this.LowestPrice) * this.Extension1, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                            }
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                shortDateString = new string[] { "pjsORS", null, null, null, null, null };
+                                oRstarts = this.ORstarts;
+                                shortDateString[1] = oRstarts.ToString();
+                                oRstarts = this.ORends;
+                                shortDateString[2] = oRstarts.ToString();
+                                oRstarts = this.Extension1;
+                                shortDateString[3] = oRstarts.ToString();
+                                shortDateString[4] = ".";
+                                shortDateString[5] = this.openingbar.ToString();
+                                Draw.Line(this, string.Concat(shortDateString), this.autoScale, currentBars, this.LowestPrice - (this.highestPrice - this.LowestPrice) * this.Extension1, 0, this.LowestPrice - (this.highestPrice - this.LowestPrice) * this.Extension1, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                            }
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                shortDateString = new string[] { "pjsORE", null, null, null, null, null };
+                                oRstarts = this.ORstarts;
+                                shortDateString[1] = oRstarts.ToString();
+                                oRstarts = this.ORends;
+                                shortDateString[2] = oRstarts.ToString();
+                                oRstarts = this.Extension1;
+                                shortDateString[3] = oRstarts.ToString();
+                                shortDateString[4] = ".";
+                                shortDateString[5] = this.openingbar.ToString();
+                                Draw.Line(this, string.Concat(shortDateString), this.autoScale, currentBars, this.highestPrice + (this.highestPrice - this.LowestPrice) * this.Extension1, 0, this.highestPrice + (this.highestPrice - this.LowestPrice) * this.Extension1, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                            }
+                        }
+                    }
+                    if (this.Extension2 > 0)
+                    {
+                        this.RExtension2u.set_Item(0, this.highestPrice + (this.highestPrice - this.LowestPrice) * this.Extension2);
+                        this.RExtension2d.set_Item(0, this.LowestPrice - (this.highestPrice - this.LowestPrice) * this.Extension2);
+                        if (base.get_CurrentBar() == 0 || this.RExtension2u.get_Item(0) != this.RExtension2u.get_Item(1) || this.RExtension2d.get_Item(0) != this.RExtension2d.get_Item(1) || base.get_IsFirstTickOfBar())
+                        {
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                shortDateString = new string[] { "pjsORSt", null, null, null, null, null };
+                                oRstarts = this.ORstarts;
+                                shortDateString[1] = oRstarts.ToString();
+                                oRstarts = this.ORends;
+                                shortDateString[2] = oRstarts.ToString();
+                                oRstarts = this.Extension2;
+                                shortDateString[3] = oRstarts.ToString();
+                                shortDateString[4] = ".";
+                                shortDateString[5] = this.openingbar.ToString();
+                                string str49 = string.Concat(shortDateString);
+                                bool flag3 = this.autoScale;
+                                string label3 = this.Label;
+                                string str50 = this.Extension2.ToString();
+                                if (this.ShowPrice)
+                                {
+                                    oRstarts = this.LowestPrice - (this.highestPrice - this.LowestPrice) * this.Extension2;
+                                    str31 = string.Concat(" ", oRstarts.ToString());
+                                }
+                                else
+                                {
+                                    str31 = "";
+                                }
+                                Draw.Text(this, str49, flag3, string.Concat(label3, " L x", str50, str31), 0, this.LowestPrice - (this.highestPrice - this.LowestPrice) * this.Extension2, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                            }
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                shortDateString = new string[] { "pjsOREt", null, null, null, null, null };
+                                oRstarts = this.ORstarts;
+                                shortDateString[1] = oRstarts.ToString();
+                                oRstarts = this.ORends;
+                                shortDateString[2] = oRstarts.ToString();
+                                oRstarts = this.Extension2;
+                                shortDateString[3] = oRstarts.ToString();
+                                shortDateString[4] = ".";
+                                shortDateString[5] = this.openingbar.ToString();
+                                string str51 = string.Concat(shortDateString);
+                                bool flag4 = this.autoScale;
+                                string label4 = this.Label;
+                                string str52 = this.Extension2.ToString();
+                                if (this.ShowPrice)
+                                {
+                                    oRstarts = this.highestPrice + (this.highestPrice - this.LowestPrice) * this.Extension2;
+                                    str30 = string.Concat(" ", oRstarts.ToString());
+                                }
+                                else
+                                {
+                                    str30 = "";
+                                }
+                                Draw.Text(this, str51, flag4, string.Concat(label4, " H x", str52, str30), 0, this.highestPrice + (this.highestPrice - this.LowestPrice) * this.Extension2, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                            }
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                shortDateString = new string[] { "pjsORS", null, null, null, null, null };
+                                oRstarts = this.ORstarts;
+                                shortDateString[1] = oRstarts.ToString();
+                                oRstarts = this.ORends;
+                                shortDateString[2] = oRstarts.ToString();
+                                oRstarts = this.Extension2;
+                                shortDateString[3] = oRstarts.ToString();
+                                shortDateString[4] = ".";
+                                shortDateString[5] = this.openingbar.ToString();
+                                Draw.Line(this, string.Concat(shortDateString), this.autoScale, currentBars, this.LowestPrice - (this.highestPrice - this.LowestPrice) * this.Extension2, 0, this.LowestPrice - (this.highestPrice - this.LowestPrice) * this.Extension2, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                            }
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                shortDateString = new string[] { "pjsORE", null, null, null, null, null };
+                                oRstarts = this.ORstarts;
+                                shortDateString[1] = oRstarts.ToString();
+                                oRstarts = this.ORends;
+                                shortDateString[2] = oRstarts.ToString();
+                                oRstarts = this.Extension2;
+                                shortDateString[3] = oRstarts.ToString();
+                                shortDateString[4] = ".";
+                                shortDateString[5] = this.openingbar.ToString();
+                                Draw.Line(this, string.Concat(shortDateString), this.autoScale, currentBars, this.highestPrice + (this.highestPrice - this.LowestPrice) * this.Extension2, 0, this.highestPrice + (this.highestPrice - this.LowestPrice) * this.Extension2, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                            }
+                        }
+                    }
+                    if (this.Extension3 > 0)
+                    {
+                        this.RExtension3u.set_Item(0, this.highestPrice + (this.highestPrice - this.LowestPrice) * this.Extension3);
+                        this.RExtension3d.set_Item(0, this.LowestPrice - (this.highestPrice - this.LowestPrice) * this.Extension3);
+                        if (base.get_CurrentBar() == 0 || this.RExtension3u.get_Item(0) != this.RExtension3u.get_Item(1) || this.RExtension3d.get_Item(0) != this.RExtension3d.get_Item(1) || base.get_IsFirstTickOfBar())
+                        {
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                shortDateString = new string[] { "pjsORSt", null, null, null, null, null };
+                                oRstarts = this.ORstarts;
+                                shortDateString[1] = oRstarts.ToString();
+                                oRstarts = this.ORends;
+                                shortDateString[2] = oRstarts.ToString();
+                                oRstarts = this.Extension3;
+                                shortDateString[3] = oRstarts.ToString();
+                                shortDateString[4] = ".";
+                                shortDateString[5] = this.openingbar.ToString();
+                                string str53 = string.Concat(shortDateString);
+                                bool flag5 = this.autoScale;
+                                string label5 = this.Label;
+                                string str54 = this.Extension3.ToString();
+                                if (this.ShowPrice)
+                                {
+                                    oRstarts = this.LowestPrice - (this.highestPrice - this.LowestPrice) * this.Extension3;
+                                    str29 = string.Concat(" ", oRstarts.ToString());
+                                }
+                                else
+                                {
+                                    str29 = "";
+                                }
+                                Draw.Text(this, str53, flag5, string.Concat(label5, " L x", str54, str29), 0, this.LowestPrice - (this.highestPrice - this.LowestPrice) * this.Extension3, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                            }
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                shortDateString = new string[] { "pjsOREt", null, null, null, null, null };
+                                oRstarts = this.ORstarts;
+                                shortDateString[1] = oRstarts.ToString();
+                                oRstarts = this.ORends;
+                                shortDateString[2] = oRstarts.ToString();
+                                oRstarts = this.Extension3;
+                                shortDateString[3] = oRstarts.ToString();
+                                shortDateString[4] = ".";
+                                shortDateString[5] = this.openingbar.ToString();
+                                string str55 = string.Concat(shortDateString);
+                                bool flag6 = this.autoScale;
+                                string label6 = this.Label;
+                                string str56 = this.Extension3.ToString();
+                                if (this.ShowPrice)
+                                {
+                                    oRstarts = this.highestPrice + (this.highestPrice - this.LowestPrice) * this.Extension3;
+                                    str28 = string.Concat(" ", oRstarts.ToString());
+                                }
+                                else
+                                {
+                                    str28 = "";
+                                }
+                                Draw.Text(this, str55, flag6, string.Concat(label6, " H x", str56, str28), 0, this.highestPrice + (this.highestPrice - this.LowestPrice) * this.Extension3, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                            }
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                shortDateString = new string[] { "pjsORS", null, null, null, null, null };
+                                oRstarts = this.ORstarts;
+                                shortDateString[1] = oRstarts.ToString();
+                                oRstarts = this.ORends;
+                                shortDateString[2] = oRstarts.ToString();
+                                oRstarts = this.Extension3;
+                                shortDateString[3] = oRstarts.ToString();
+                                shortDateString[4] = ".";
+                                shortDateString[5] = this.openingbar.ToString();
+                                Draw.Line(this, string.Concat(shortDateString), this.autoScale, currentBars, this.LowestPrice - (this.highestPrice - this.LowestPrice) * this.Extension3, 0, this.LowestPrice - (this.highestPrice - this.LowestPrice) * this.Extension3, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                            }
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                shortDateString = new string[] { "pjsORE", null, null, null, null, null };
+                                oRstarts = this.ORstarts;
+                                shortDateString[1] = oRstarts.ToString();
+                                oRstarts = this.ORends;
+                                shortDateString[2] = oRstarts.ToString();
+                                oRstarts = this.Extension3;
+                                shortDateString[3] = oRstarts.ToString();
+                                shortDateString[4] = ".";
+                                shortDateString[5] = this.openingbar.ToString();
+                                Draw.Line(this, string.Concat(shortDateString), this.autoScale, currentBars, this.highestPrice + (this.highestPrice - this.LowestPrice) * this.Extension3, 0, this.highestPrice + (this.highestPrice - this.LowestPrice) * this.Extension3, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                            }
+                        }
+                    }
+                    if (this.Extension1points > 0)
+                    {
+                        if (this.started && !this.hideUntilFormed || !this.started)
+                        {
+                            shortDateString = new string[] { "pjsORSt", null, null, null, null, null };
+                            oRstarts = this.ORstarts;
+                            shortDateString[1] = oRstarts.ToString();
+                            oRstarts = this.ORends;
+                            shortDateString[2] = oRstarts.ToString();
+                            oRstarts = this.Extension1points;
+                            shortDateString[3] = oRstarts.ToString();
+                            shortDateString[4] = ".";
+                            shortDateString[5] = this.openingbar.ToString();
+                            string str57 = string.Concat(shortDateString);
+                            bool flag7 = this.autoScale;
+                            string label7 = this.Label;
+                            string str58 = this.Extension1points.ToString();
+                            if (this.ShowPrice)
+                            {
+                                oRstarts = this.LowestPrice - this.Extension1points;
+                                str27 = string.Concat(" ", oRstarts.ToString());
+                            }
+                            else
+                            {
+                                str27 = "";
+                            }
+                            Draw.Text(this, str57, flag7, string.Concat(label7, " L pts ", str58, str27), 0, this.LowestPrice - this.Extension1points, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        }
+                        if (this.started && !this.hideUntilFormed || !this.started)
+                        {
+                            shortDateString = new string[] { "pjsOREt", null, null, null, null, null };
+                            oRstarts = this.ORstarts;
+                            shortDateString[1] = oRstarts.ToString();
+                            oRstarts = this.ORends;
+                            shortDateString[2] = oRstarts.ToString();
+                            oRstarts = this.Extension1points;
+                            shortDateString[3] = oRstarts.ToString();
+                            shortDateString[4] = ".";
+                            shortDateString[5] = this.openingbar.ToString();
+                            string str59 = string.Concat(shortDateString);
+                            bool flag8 = this.autoScale;
+                            string label8 = this.Label;
+                            string str60 = this.Extension1points.ToString();
+                            if (this.ShowPrice)
+                            {
+                                oRstarts = this.highestPrice + this.Extension1points;
+                                str26 = string.Concat(" ", oRstarts.ToString());
+                            }
+                            else
+                            {
+                                str26 = "";
+                            }
+                            Draw.Text(this, str59, flag8, string.Concat(label8, " H pts ", str60, str26), 0, this.highestPrice + this.Extension1points, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        }
+                        if (this.started && !this.hideUntilFormed || !this.started)
+                        {
+                            shortDateString = new string[] { "pjsORS", null, null, null, null, null };
+                            oRstarts = this.ORstarts;
+                            shortDateString[1] = oRstarts.ToString();
+                            oRstarts = this.ORends;
+                            shortDateString[2] = oRstarts.ToString();
+                            oRstarts = this.Extension1points;
+                            shortDateString[3] = oRstarts.ToString();
+                            shortDateString[4] = ".";
+                            shortDateString[5] = this.openingbar.ToString();
+                            Draw.Line(this, string.Concat(shortDateString), this.autoScale, currentBars, this.LowestPrice - this.Extension1points, 0, this.LowestPrice - this.Extension1points, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                        }
+                        if (this.started && !this.hideUntilFormed || !this.started)
+                        {
+                            shortDateString = new string[] { "pjsORE", null, null, null, null, null };
+                            oRstarts = this.ORstarts;
+                            shortDateString[1] = oRstarts.ToString();
+                            oRstarts = this.ORends;
+                            shortDateString[2] = oRstarts.ToString();
+                            oRstarts = this.Extension1points;
+                            shortDateString[3] = oRstarts.ToString();
+                            shortDateString[4] = ".";
+                            shortDateString[5] = this.openingbar.ToString();
+                            Draw.Line(this, string.Concat(shortDateString), this.autoScale, currentBars, this.highestPrice + this.Extension1points, 0, this.highestPrice + this.Extension1points, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                        }
+                    }
+                    if (this.ShowMidPoint)
+                    {
+                        this.RMid.set_Item(0, this.LowestPrice + (this.highestPrice - this.LowestPrice) / 2);
+                        if (base.get_CurrentBar() == 0 || this.RMid.get_Item(0) != this.RMid.get_Item(1) || base.get_IsFirstTickOfBar())
+                        {
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                string str61 = this.ORstarts.ToString();
+                                oRstarts = this.ORends;
+                                string str62 = string.Concat("pjsORSMidt", str61, oRstarts.ToString(), this.openingbar.ToString());
+                                bool flag9 = this.autoScale;
+                                string label9 = this.Label;
+                                if (this.ShowPrice)
+                                {
+                                    oRstarts = this.LowestPrice + (this.highestPrice - this.LowestPrice) / 2;
+                                    str25 = string.Concat(" ", oRstarts.ToString());
+                                }
+                                else
+                                {
+                                    str25 = "";
+                                }
+                                Draw.Text(this, str62, flag9, string.Concat(label9, " Mid", str25), 0, this.LowestPrice + (this.highestPrice - this.LowestPrice) / 2, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                            }
+                            if (this.started && !this.hideUntilFormed || !this.started)
+                            {
+                                string str63 = this.ORstarts.ToString();
+                                oRstarts = this.ORends;
+                                Draw.Line(this, string.Concat("pjsORSMid", str63, oRstarts.ToString(), this.openingbar.ToString()), this.autoScale, currentBars, this.LowestPrice + (this.highestPrice - this.LowestPrice) / 2, 0, this.LowestPrice + (this.highestPrice - this.LowestPrice) / 2, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                            }
+                        }
+                    }
+                }
+            }
+            if (base.get_BarsInProgress() == 0)
+            {
+                int currentBars1 = base.get_CurrentBars()[0] - this.firstBarOfSession;
+                if (this.shortLineOnly)
+                {
+                    currentBars1 = Math.Min(base.get_CurrentBar(), 12);
+                }
+                if (base.get_IsFirstTickOfBar())
+                {
+                    if (this.PriorSession_showAvgRangeExtension && this.daily_range_avg > 0)
+                    {
+                        string str64 = string.Concat("pjsORSCSOpenExth", this.firstBarOfSession.ToString());
+                        bool flag10 = this.autoScale;
+                        if (this.ShowPrice)
+                        {
+                            oRstarts = this.CurrentSession_Open + this.daily_range_expansion;
+                            str23 = string.Concat(" ", oRstarts.ToString());
+                        }
+                        else
+                        {
+                            str23 = "";
+                        }
+                        Draw.Text(this, str64, flag10, string.Concat("Session Expansion H", str23), 0, this.CurrentSession_Open + this.daily_range_expansion, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORSCSlOpenExth", this.firstBarOfSession.ToString()), this.autoScale, currentBars1, this.CurrentSession_Open + this.daily_range_expansion, 0, this.CurrentSession_Open + this.daily_range_expansion, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                        string str65 = string.Concat("pjsORSCSOpenExtl", this.firstBarOfSession.ToString());
+                        bool flag11 = this.autoScale;
+                        if (this.ShowPrice)
+                        {
+                            oRstarts = this.CurrentSession_Open - this.daily_range_expansion;
+                            str24 = string.Concat(" ", oRstarts.ToString());
+                        }
+                        else
+                        {
+                            str24 = "";
+                        }
+                        Draw.Text(this, str65, flag11, string.Concat("Session Expansion L", str24), 0, this.CurrentSession_Open - this.daily_range_expansion, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORSCSlOpenExtl", this.firstBarOfSession.ToString()), this.autoScale, currentBars1, this.CurrentSession_Open - this.daily_range_expansion, 0, this.CurrentSession_Open - this.daily_range_expansion, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.PriorSession_showProjectedRangeExtension && this.daily_range_avg > 0)
+                    {
+                        string str66 = string.Concat("pjsORSCSOpenExthEst", this.firstBarOfSession.ToString());
+                        bool flag12 = this.autoScale;
+                        if (this.ShowPrice)
+                        {
+                            oRstarts = this.CurrentSession_Low + this.daily_range_avg;
+                            str21 = string.Concat(" ", oRstarts.ToString());
+                        }
+                        else
+                        {
+                            str21 = "";
+                        }
+                        Draw.Text(this, str66, flag12, string.Concat("Session Projected H", str21), 0, this.CurrentSession_Low + this.daily_range_avg, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORSCSlOpenExthEst", this.firstBarOfSession.ToString()), this.autoScale, currentBars1, this.CurrentSession_Low + this.daily_range_avg, 0, this.CurrentSession_Low + this.daily_range_avg, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                        string str67 = string.Concat("pjsORSCSOpenExtlEst", this.firstBarOfSession.ToString());
+                        bool flag13 = this.autoScale;
+                        if (this.ShowPrice)
+                        {
+                            oRstarts = this.CurrentSession_High - this.daily_range_avg;
+                            str22 = string.Concat(" ", oRstarts.ToString());
+                        }
+                        else
+                        {
+                            str22 = "";
+                        }
+                        Draw.Text(this, str67, flag13, string.Concat("Session Projected L", str22), 0, this.CurrentSession_High - this.daily_range_avg, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORSCSlOpenExtlEst", this.firstBarOfSession.ToString()), this.autoScale, currentBars1, this.CurrentSession_High - this.daily_range_avg, 0, this.CurrentSession_High - this.daily_range_avg, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.PriorSession_showAvgRangeNoise && this.daily_range_avg > 0)
+                    {
+                        string str68 = string.Concat("pjsORSCSOpenExthN", this.firstBarOfSession.ToString());
+                        bool flag14 = this.autoScale;
+                        if (this.ShowPrice)
+                        {
+                            oRstarts = this.CurrentSession_Open + this.daily_range_noise;
+                            str19 = string.Concat(" ", oRstarts.ToString());
+                        }
+                        else
+                        {
+                            str19 = "";
+                        }
+                        Draw.Text(this, str68, flag14, string.Concat("Session Noise H", str19), 0, this.CurrentSession_Open + this.daily_range_noise, 8, this.StrokeNoise.get_Brush(), this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.StrokeNoise.get_Opacity());
+                        Draw.Line(this, string.Concat("pjsORSCSlOpenExthN", this.firstBarOfSession.ToString()), this.autoScale, currentBars1, this.CurrentSession_Open + this.daily_range_noise, 0, this.CurrentSession_Open + this.daily_range_noise, this.StrokeNoise.get_Brush(), this.DetailDashStyle, (int)this.StrokeNoise.get_Width());
+                        string str69 = string.Concat("pjsORSCSOpenExtlN", this.firstBarOfSession.ToString());
+                        bool flag15 = this.autoScale;
+                        if (this.ShowPrice)
+                        {
+                            oRstarts = this.CurrentSession_Open - this.daily_range_noise;
+                            str20 = string.Concat(" ", oRstarts.ToString());
+                        }
+                        else
+                        {
+                            str20 = "";
+                        }
+                        Draw.Text(this, str69, flag15, string.Concat("Session Noise L", str20), 0, this.CurrentSession_Open - this.daily_range_noise, 8, this.StrokeNoise.get_Brush(), this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.StrokeNoise.get_Opacity());
+                        Draw.Line(this, string.Concat("pjsORSCSlOpenExtlN", this.firstBarOfSession.ToString()), this.autoScale, currentBars1, this.CurrentSession_Open - this.daily_range_noise, 0, this.CurrentSession_Open - this.daily_range_noise, this.StrokeNoise.get_Brush(), this.DetailDashStyle, (int)this.StrokeNoise.get_Width());
+                    }
+                }
+                if (this.CurrentSession_High_Last != this.CurrentSession_High || this.CurrentSession_Low_Last != this.CurrentSession_Low || base.get_IsFirstTickOfBar())
+                {
+                    if (this.CurrentSession_showLow)
+                    {
+                        Draw.Text(this, string.Concat("pjsORSCSLow", this.firstBarOfSession.ToString()), this.autoScale, string.Concat("Session L", (this.ShowPrice ? string.Concat(" ", this.CurrentSession_Low.ToString()) : "")), 0, this.CurrentSession_Low, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORSCSlLow", this.firstBarOfSession.ToString()), this.autoScale, currentBars1, this.CurrentSession_Low, 0, this.CurrentSession_Low, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.CurrentSession_showHigh)
+                    {
+                        Draw.Text(this, string.Concat("pjsORSCSHigh", this.firstBarOfSession.ToString()), this.autoScale, string.Concat("Session H", (this.ShowPrice ? string.Concat(" ", this.CurrentSession_High.ToString()) : "")), 0, this.CurrentSession_High, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORSCSlHigh", this.firstBarOfSession.ToString()), this.autoScale, currentBars1, this.CurrentSession_High, 0, this.CurrentSession_High, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.CurrentSession_showOpen)
+                    {
+                        Draw.Text(this, string.Concat("pjsORSCSOpen", this.firstBarOfSession.ToString()), this.autoScale, string.Concat("Session O", (this.ShowPrice ? string.Concat(" ", this.CurrentSession_Open.ToString()) : "")), 0, this.CurrentSession_Open, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORSCSlOpen", this.firstBarOfSession.ToString()), this.autoScale, currentBars1, this.CurrentSession_Open, 0, this.CurrentSession_Open, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.CurrentSession_showMID)
+                    {
+                        string str70 = string.Concat("pjsORSCSMID", this.firstBarOfSession.ToString());
+                        bool flag16 = this.autoScale;
+                        if (this.ShowPrice)
+                        {
+                            oRstarts = base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.CurrentSession_High - (this.CurrentSession_High - this.CurrentSession_Low) / 2);
+                            str18 = string.Concat(" ", oRstarts.ToString());
+                        }
+                        else
+                        {
+                            str18 = "";
+                        }
+                        Draw.Text(this, str70, flag16, string.Concat("Session Mid", str18), 0, base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.CurrentSession_High - (this.CurrentSession_High - this.CurrentSession_Low) / 2), 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORSCSlMID", this.firstBarOfSession.ToString()), this.autoScale, currentBars1, base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.CurrentSession_High - (this.CurrentSession_High - this.CurrentSession_Low) / 2), 0, base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.CurrentSession_High - (this.CurrentSession_High - this.CurrentSession_Low) / 2), this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                }
+                if (this.CurrentWeek_High_Last != this.CurrentWeek_High || this.CurrentWeek_Low_Last != this.CurrentWeek_Low || base.get_IsFirstTickOfBar())
+                {
+                    if (this.CurrentWeek_showLow)
+                    {
+                        Draw.Text(this, string.Concat("pjsORSCwLow", this.firstBarOfWeek.ToString()), this.autoScale, string.Concat("Weekly L", (this.ShowPrice ? string.Concat(" ", this.CurrentWeek_Low.ToString()) : "")), 0, this.CurrentWeek_Low, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORSCwlLow", this.firstBarOfWeek.ToString()), this.autoScale, base.get_CurrentBar() - this.firstBarOfWeek, this.CurrentWeek_Low, 0, this.CurrentWeek_Low, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.CurrentWeek_showHigh)
+                    {
+                        Draw.Text(this, string.Concat("pjsORSCwHigh", this.firstBarOfWeek.ToString()), this.autoScale, string.Concat("Weekly H", (this.ShowPrice ? string.Concat(" ", this.CurrentWeek_High.ToString()) : "")), 0, this.CurrentWeek_High, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORSwSlHigh", this.firstBarOfWeek.ToString()), this.autoScale, currentBars1, this.CurrentWeek_High, 0, this.CurrentWeek_High, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.CurrentWeek_showOpen)
+                    {
+                        Draw.Text(this, string.Concat("pjsORSCwOpen", this.firstBarOfWeek.ToString()), this.autoScale, string.Concat("Weekly O", (this.ShowPrice ? string.Concat(" ", this.CurrentWeek_Open.ToString()) : "")), 0, this.CurrentWeek_Open, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORSCwlOpen", this.firstBarOfWeek.ToString()), this.autoScale, currentBars1, this.CurrentWeek_Open, 0, this.CurrentWeek_Open, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.CurrentWeek_showMID)
+                    {
+                        string str71 = string.Concat("pjsORSCwMID", this.firstBarOfWeek.ToString());
+                        bool flag17 = this.autoScale;
+                        if (this.ShowPrice)
+                        {
+                            oRstarts = base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.CurrentWeek_High - (this.CurrentWeek_High - this.CurrentWeek_Low) / 2);
+                            str17 = string.Concat(" ", oRstarts.ToString());
+                        }
+                        else
+                        {
+                            str17 = "";
+                        }
+                        Draw.Text(this, str71, flag17, string.Concat("Weekly Mid", str17), 0, base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.CurrentWeek_High - (this.CurrentWeek_High - this.CurrentWeek_Low) / 2), 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORSCwlMID", this.firstBarOfWeek.ToString()), this.autoScale, currentBars1, base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.CurrentWeek_High - (this.CurrentWeek_High - this.CurrentWeek_Low) / 2), 0, base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.CurrentWeek_High - (this.CurrentWeek_High - this.CurrentWeek_Low) / 2), this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                }
+                if (this.PriorSessionLastUpdatedBar != base.get_CurrentBars()[0])
+                {
+                    if (this.PriorSession_showLow)
+                    {
+                        if (this.PriorSession_showInCurrentSessionOnly)
+                        {
+                            str16 = "";
+                        }
+                        else
+                        {
+                            str16 = (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString());
+                        }
+                        Draw.Text(this, string.Concat("pjsORSPSLow", str16), this.autoScale, string.Concat("Prior Session L", (this.ShowPrice ? string.Concat(" ", this.PriorSession_Low.ToString()) : "")), 0, this.PriorSession_Low, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORSPSlLow", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString())), this.autoScale, currentBars1, this.PriorSession_Low, 0, this.PriorSession_Low, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.PriorSession_showHigh)
+                    {
+                        Draw.Text(this, string.Concat("pjsORSPSHigh", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString())), this.autoScale, string.Concat("Prior Session H", (this.ShowPrice ? string.Concat(" ", this.PriorSession_High.ToString()) : "")), 0, this.PriorSession_High, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORSPSlHigh", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString())), this.autoScale, currentBars1, this.PriorSession_High, 0, this.PriorSession_High, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.PriorSession_showClose)
+                    {
+                        Draw.Text(this, string.Concat("pjsORSPSClose", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString())), this.autoScale, string.Concat("Prior Session C", (this.ShowPrice ? string.Concat(" ", this.PriorSession_Close.ToString()) : "")), 0, this.PriorSession_Close, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORSPSlClose", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString())), this.autoScale, currentBars1, this.PriorSession_Close, 0, this.PriorSession_Close, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.PriorSession_Extension1 > 0)
+                    {
+                        string str72 = string.Concat("pjsORPSStt", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString()));
+                        bool flag18 = this.autoScale;
+                        string str73 = this.PriorSession_Extension1.ToString();
+                        if (this.ShowPrice)
+                        {
+                            oRstarts = this.CurrentSession_Low + this.daily_range_avg + this.daily_range_avg * this.PriorSession_Extension1;
+                            str14 = string.Concat(" ", oRstarts.ToString());
+                        }
+                        else
+                        {
+                            str14 = "";
+                        }
+                        Draw.Text(this, str72, flag18, string.Concat("Session Projected H x ", str73, str14), 0, this.CurrentSession_Low + this.daily_range_avg + this.daily_range_avg * this.PriorSession_Extension1, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORPSStl", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString())), this.autoScale, currentBars1, this.CurrentSession_Low + this.daily_range_avg + this.daily_range_avg * this.PriorSession_Extension1, 0, this.CurrentSession_Low + this.daily_range_avg + this.daily_range_avg * this.PriorSession_Extension1, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                        string str74 = string.Concat("pjsORPSEt", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString()));
+                        bool flag19 = this.autoScale;
+                        string str75 = this.PriorSession_Extension1.ToString();
+                        if (this.ShowPrice)
+                        {
+                            oRstarts = this.CurrentSession_High - this.daily_range_avg - this.daily_range_avg * this.PriorSession_Extension1;
+                            str15 = string.Concat(" ", oRstarts.ToString());
+                        }
+                        else
+                        {
+                            str15 = "";
+                        }
+                        Draw.Text(this, str74, flag19, string.Concat("Session Projected L x ", str75, str15), 0, this.CurrentSession_High - this.daily_range_avg - this.daily_range_avg * this.PriorSession_Extension1, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORPSEl", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString())), this.autoScale, currentBars1, this.CurrentSession_High - this.daily_range_avg - this.daily_range_avg * this.PriorSession_Extension1, 0, this.CurrentSession_High - this.daily_range_avg - this.daily_range_avg * this.PriorSession_Extension1, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.PriorSession_Extension2 > 0)
+                    {
+                        string str76 = string.Concat("pjsORPSStt2", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString()));
+                        bool flag20 = this.autoScale;
+                        string str77 = this.PriorSession_Extension2.ToString();
+                        if (this.ShowPrice)
+                        {
+                            oRstarts = this.CurrentSession_Low + this.daily_range_avg + this.daily_range_avg * this.PriorSession_Extension2;
+                            str12 = string.Concat(" ", oRstarts.ToString());
+                        }
+                        else
+                        {
+                            str12 = "";
+                        }
+                        Draw.Text(this, str76, flag20, string.Concat("Session Projected H x ", str77, str12), 0, this.CurrentSession_Low + this.daily_range_avg + this.daily_range_avg * this.PriorSession_Extension2, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORPSStl2", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString())), this.autoScale, currentBars1, this.CurrentSession_Low + this.daily_range_avg + this.daily_range_avg * this.PriorSession_Extension2, 0, this.CurrentSession_Low + this.daily_range_avg + this.daily_range_avg * this.PriorSession_Extension2, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                        string str78 = string.Concat("pjsORPSEt2", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString()));
+                        bool flag21 = this.autoScale;
+                        string str79 = this.PriorSession_Extension2.ToString();
+                        if (this.ShowPrice)
+                        {
+                            oRstarts = this.CurrentSession_High - this.daily_range_avg - this.daily_range_avg * this.PriorSession_Extension2;
+                            str13 = string.Concat(" ", oRstarts.ToString());
+                        }
+                        else
+                        {
+                            str13 = "";
+                        }
+                        Draw.Text(this, str78, flag21, string.Concat("Session Projected L x ", str79, str13), 0, this.CurrentSession_High - this.daily_range_avg - this.daily_range_avg * this.PriorSession_Extension2, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORPSEl2", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString())), this.autoScale, currentBars1, this.CurrentSession_High - this.daily_range_avg - this.daily_range_avg * this.PriorSession_Extension2, 0, this.CurrentSession_High - this.daily_range_avg - this.daily_range_avg * this.PriorSession_Extension2, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.PriorSession_Extension3 > 0)
+                    {
+                        string str80 = string.Concat("pjsORPSStt3", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString()));
+                        bool flag22 = this.autoScale;
+                        string str81 = this.PriorSession_Extension3.ToString();
+                        if (this.ShowPrice)
+                        {
+                            oRstarts = this.CurrentSession_Low + this.daily_range_avg + this.daily_range_avg * this.PriorSession_Extension3;
+                            str10 = string.Concat(" ", oRstarts.ToString());
+                        }
+                        else
+                        {
+                            str10 = "";
+                        }
+                        Draw.Text(this, str80, flag22, string.Concat("Session Projected H x ", str81, str10), 0, this.CurrentSession_Low + this.daily_range_avg + this.daily_range_avg * this.PriorSession_Extension3, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORPSStl3", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString())), this.autoScale, currentBars1, this.CurrentSession_Low + this.daily_range_avg + this.daily_range_avg * this.PriorSession_Extension3, 0, this.CurrentSession_Low + this.daily_range_avg + this.daily_range_avg * this.PriorSession_Extension3, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                        string str82 = string.Concat("pjsORPSEt3", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString()));
+                        bool flag23 = this.autoScale;
+                        string str83 = this.PriorSession_Extension3.ToString();
+                        if (this.ShowPrice)
+                        {
+                            oRstarts = this.CurrentSession_High - this.daily_range_avg - this.daily_range_avg * this.PriorSession_Extension3;
+                            str11 = string.Concat(" ", oRstarts.ToString());
+                        }
+                        else
+                        {
+                            str11 = "";
+                        }
+                        Draw.Text(this, str82, flag23, string.Concat("Session Projected L x ", str83, str11), 0, this.CurrentSession_High - this.daily_range_avg - this.daily_range_avg * this.PriorSession_Extension3, 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                        Draw.Line(this, string.Concat("pjsORPSEl3", (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString())), this.autoScale, currentBars1, this.CurrentSession_High - this.daily_range_avg - this.daily_range_avg * this.PriorSession_Extension3, 0, this.CurrentSession_High - this.daily_range_avg - this.daily_range_avg * this.PriorSession_Extension3, this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                    }
+                    if (this.PriorSession_retracements.Trim() != "")
+                    {
+                        string[] strArrays3 = this.PriorSession_retracements.Split(new char[] { ',' });
+                        for (int i = 0; i < (int)strArrays3.Length; i++)
+                        {
+                            string str84 = strArrays3[i];
+                            string str85 = string.Concat("pjsORPSSrpt", str84, (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString()));
+                            bool flag24 = this.autoScale;
+                            string str86 = str84;
+                            if (this.ShowPrice)
+                            {
+                                oRstarts = this.PriorSession_High - (this.PriorSession_High - this.PriorSession_Low) * (Convert.ToDouble(str84) / 100);
+                                str9 = string.Concat(" ", oRstarts.ToString());
+                            }
+                            else
+                            {
+                                str9 = "";
+                            }
+                            Draw.Text(this, str85, flag24, string.Concat("Prior day retracement ", str86, "%", str9), 0, this.PriorSession_High - (this.PriorSession_High - this.PriorSession_Low) * (Convert.ToDouble(str84) / 100), 8, this.Linecolor, this.myFont, TextAlignment.Right, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                            Draw.Line(this, string.Concat("pjsORPSSrptl", str84, (this.PriorSession_showInCurrentSessionOnly ? "" : this.firstBarOfSession.ToString())), this.autoScale, currentBars1, this.PriorSession_High - (this.PriorSession_High - this.PriorSession_Low) * (Convert.ToDouble(str84) / 100), 0, this.PriorSession_High - (this.PriorSession_High - this.PriorSession_Low) * (Convert.ToDouble(str84) / 100), this.Linecolor, this.DetailDashStyle, this.lineWidth);
+                        }
+                    }
+                    this.PriorSessionLastUpdatedBar = base.get_CurrentBars()[0];
+                }
+            }
+            if (this.daily_ranges.Count > 0)
+            {
+                try
+                {
+                    if (this.daily_ranges.Count > this.last_daily_range_count)
+                    {
+                        this.last_daily_range_count = this.daily_ranges.Count;
+                        this.drl = 0;
+                        this.days = 0;
+                        this.fiveday_avg = 0;
+                        this.fiveday_noise = 0;
+                        this.fiveday_expansion = 0;
+                        this.twentyday_avg = 0;
+                        this.twentyday_noise = 0;
+                        this.twentyday_expansion = 0;
+                        this.percentComplete = 0;
+                        this.drl = this.daily_ranges.Count;
+                        while (this.drl > this.daily_ranges.Count - 20)
+                        {
+                            if (this.drl > this.daily_ranges.Count - 5)
+                            {
+                                this.fiveday_avg += this.daily_ranges[this.drl - 1];
+                                this.fiveday_noise += this.daily_noise[this.drl - 1];
+                                this.fiveday_expansion += this.daily_expansion[this.drl - 1];
+                            }
+                            this.twentyday_avg += this.daily_ranges[this.drl - 1];
+                            this.twentyday_noise += this.daily_noise[this.drl - 1];
+                            this.twentyday_expansion += this.daily_expansion[this.drl - 1];
+                            if (this.daily_ranges[this.drl - 1] > 0)
+                            {
+                                this.days++;
+                            }
+                            if (this.drl == 1)
+                            {
+                                break;
+                            }
+                            this.drl--;
+                        }
+                        this.fiveday_avg = base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.fiveday_avg / (double)Math.Min(5, this.days));
+                        this.fiveday_noise = base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.fiveday_noise / (double)Math.Min(5, this.days));
+                        this.fiveday_expansion = base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.fiveday_expansion / (double)Math.Min(5, this.days));
+                        this.twentyday_avg = base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.twentyday_avg / (double)Math.Min(20, this.days));
+                        this.twentyday_noise = base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.twentyday_noise / (double)Math.Min(20, this.days));
+                        this.twentyday_expansion = base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.twentyday_expansion / (double)Math.Min(20, this.days));
+                        this.daily_range_avg = this.fiveday_avg;
+                        this.daily_range_noise = this.fiveday_noise;
+                        this.daily_range_expansion = this.fiveday_expansion;
+                    }
+                    if (this.weekly_ranges.Count > this.last_weekly_range_count)
+                    {
+                        this.last_weekly_range_count = this.weekly_ranges.Count;
+                        this.drl = 0;
+                        this.weeks = 0;
+                        this.fiveweek_avg = 0;
+                        this.fiveweek_noise = 0;
+                        this.fiveweek_expansion = 0;
+                        this.twentyweek_avg = 0;
+                        this.twentyweek_noise = 0;
+                        this.twentyweek_expansion = 0;
+                        this.percentComplete = 0;
+                        this.drl = this.weekly_ranges.Count;
+                        while (this.drl > this.weekly_ranges.Count - 20)
+                        {
+                            if (this.drl > this.weekly_ranges.Count - 5)
+                            {
+                                this.fiveweek_avg += this.weekly_ranges[this.drl - 1];
+                                this.fiveweek_noise += this.weekly_noise[this.drl - 1];
+                                this.fiveweek_expansion += this.weekly_expansion[this.drl - 1];
+                            }
+                            this.twentyweek_avg += this.weekly_ranges[this.drl - 1];
+                            this.twentyweek_noise += this.weekly_noise[this.drl - 1];
+                            this.twentyweek_expansion += this.weekly_expansion[this.drl - 1];
+                            if (this.weekly_ranges[this.drl - 1] > 0)
+                            {
+                                this.weeks++;
+                            }
+                            if (this.drl == 1)
+                            {
+                                break;
+                            }
+                            this.drl--;
+                        }
+                        this.fiveweek_avg = base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.fiveweek_avg / (double)Math.Min(5, this.weeks));
+                        this.fiveweek_noise = base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.fiveweek_noise / (double)Math.Min(5, this.weeks));
+                        this.fiveweek_expansion = base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.fiveweek_expansion / (double)Math.Min(5, this.weeks));
+                        this.twentyweek_avg = base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.twentyweek_avg / (double)Math.Min(20, this.weeks));
+                        this.twentyweek_noise = base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.twentyweek_noise / (double)Math.Min(20, this.weeks));
+                        this.twentyweek_expansion = base.get_Instrument().get_MasterInstrument().RoundToTickSize(this.twentyweek_expansion / (double)Math.Min(20, this.weeks));
+                        this.weekly_range_avg = this.fiveweek_avg;
+                        this.weekly_range_noise = this.fiveweek_noise;
+                        this.weekly_range_expansion = this.fiveweek_expansion;
+                    }
+                    this.percentComplete = (this.CurrentSession_High - this.CurrentSession_Low) / this.fiveday_avg * 100;
+                    this.percentCompleteWeek = (this.CurrentWeek_High - this.CurrentWeek_Low) / this.fiveweek_avg * 100;
+                    if (this.PriorSession_showStats)
+                    {
+                        shortDateString = new string[13];
+                        shortDateString[0] = "Prior Session Range ";
+                        string[] strArrays4 = shortDateString;
+                        if (!this.showasTicksPips)
+                        {
+                            oRstarts = this.daily_ranges[this.daily_ranges.Count - 1];
+                            str = oRstarts.ToString();
+                        }
+                        else
+                        {
+                            oRstarts = this.daily_ranges[this.daily_ranges.Count - 1] / base.get_TickSize();
+                            str = oRstarts.ToString("N0");
+                        }
+                        strArrays4[1] = str;
+                        shortDateString[2] = "\n";
+                        barsInProgress = Math.Min(5, this.days);
+                        shortDateString[3] = barsInProgress.ToString();
+                        shortDateString[4] = " day avg ";
+                        string[] strArrays5 = shortDateString;
+                        if (!this.showasTicksPips)
+                        {
+                            str1 = this.fiveday_avg.ToString();
+                        }
+                        else
+                        {
+                            oRstarts = this.fiveday_avg / base.get_TickSize();
+                            str1 = oRstarts.ToString("N0");
+                        }
+                        strArrays5[5] = str1;
+                        string[] strArrays6 = shortDateString;
+                        if (this.days > 6)
+                        {
+                            barsInProgress = Math.Min(20, this.days);
+                            string str87 = barsInProgress.ToString();
+                            if (!this.showasTicksPips)
+                            {
+                                str2 = this.twentyday_avg.ToString();
+                            }
+                            else
+                            {
+                                oRstarts = this.twentyday_avg / base.get_TickSize();
+                                str2 = oRstarts.ToString("N0");
+                            }
+                            str3 = string.Concat("\n", str87, " day avg ", str2);
+                        }
+                        else
+                        {
+                            str3 = "";
+                        }
+                        strArrays6[6] = str3;
+                        shortDateString[7] = "\nCurrent Session Range ";
+                        string[] strArrays7 = shortDateString;
+                        if (!this.showasTicksPips)
+                        {
+                            oRstarts = this.CurrentSession_High - this.CurrentSession_Low;
+                            str4 = oRstarts.ToString();
+                        }
+                        else
+                        {
+                            oRstarts = (this.CurrentSession_High - this.CurrentSession_Low) / base.get_TickSize();
+                            str4 = oRstarts.ToString("N0");
+                        }
+                        strArrays7[8] = str4;
+                        shortDateString[9] = " (%";
+                        shortDateString[10] = this.percentComplete.ToString("N1");
+                        shortDateString[11] = ")";
+                        string[] strArrays8 = shortDateString;
+                        if (this.weekly_ranges.Count > 1)
+                        {
+                            upper = new string[] { "\nPrior Week Range ", null, null, null, null, null, null, null, null, null, null };
+                            string[] strArrays9 = upper;
+                            if (!this.showasTicksPips)
+                            {
+                                oRstarts = this.weekly_ranges[this.weekly_ranges.Count - 1];
+                                str5 = oRstarts.ToString();
+                            }
+                            else
+                            {
+                                oRstarts = this.weekly_ranges[this.weekly_ranges.Count - 1] / base.get_TickSize();
+                                str5 = oRstarts.ToString("N0");
+                            }
+                            strArrays9[1] = str5;
+                            upper[2] = "\n";
+                            barsInProgress = Math.Min(5, this.weeks);
+                            upper[3] = barsInProgress.ToString();
+                            upper[4] = " week avg ";
+                            string[] strArrays10 = upper;
+                            if (!this.showasTicksPips)
+                            {
+                                str6 = this.fiveweek_avg.ToString();
+                            }
+                            else
+                            {
+                                oRstarts = this.fiveweek_avg / base.get_TickSize();
+                                str6 = oRstarts.ToString("N0");
+                            }
+                            strArrays10[5] = str6;
+                            upper[6] = "\nCurrent Week Range ";
+                            string[] strArrays11 = upper;
+                            if (!this.showasTicksPips)
+                            {
+                                oRstarts = this.CurrentWeek_High - this.CurrentWeek_Low;
+                                str7 = oRstarts.ToString();
+                            }
+                            else
+                            {
+                                oRstarts = (this.CurrentWeek_High - this.CurrentWeek_Low) / base.get_TickSize();
+                                str7 = oRstarts.ToString("N0");
+                            }
+                            strArrays11[7] = str7;
+                            upper[8] = " (%";
+                            upper[9] = this.percentCompleteWeek.ToString("N1");
+                            upper[10] = ")";
+                            str8 = string.Concat(upper);
+                        }
+                        else
+                        {
+                            str8 = "";
+                        }
+                        strArrays8[12] = str8;
+                        Draw.TextFixed(this, "pjsORrange_stat", string.Concat(shortDateString), TextPosition.BottomLeft, this.Linecolor, this.myFont, Brushes.Transparent, Brushes.Transparent, this.textOpacity);
+                    }
+                }
+                catch (Exception exception4)
+                {
+                    base.Print(string.Concat("Error in OBU : ", exception4.Message));
+                }
+            }
+            this.h.set_Item(0, this.highestPrice);
+            this.l.set_Item(0, this.LowestPrice);
+            this.m.set_Item(0, this.LowestPrice + (this.highestPrice - this.LowestPrice) / 2);
+            this.pc.set_Item(0, Math.Round(this.percentComplete, 1));
+            this.CurrentSession_High_Last = this.CurrentSession_High;
+            this.CurrentSession_Low_Last = this.CurrentSession_Low;
+            this.CurrentWeek_High_Last = this.CurrentWeek_High;
+            this.CurrentWeek_Low_Last = this.CurrentWeek_Low;
+            this.highestPriceLast = this.highestPrice;
+            this.LowestPriceLast = this.LowestPrice;
+            this.updateSession(this.CurrentSession);
+            if (this.showStatus)
+            {
+                shortDateString = new string[] { "OR:", this.Label, " ", null, null, null };
+                shortDateString[3] = (this.started ? "Started " : "Waiting ");
+                shortDateString[4] = " End Time ";
+                shortDateString[5] = (this.ORendsDuration > 0 ? this.endTime.ToString() : this.ORends.ToString());
+                Draw.TextFixed(this, "pjsORv2l", string.Concat(shortDateString), TextPosition.TopLeft);
+            }
+        }
+
+        protected override void OnStateChange()
+        {
+            if (base.get_State() != 1)
+            {
+                if (base.get_State() != 2)
+                {
+                    if (base.get_State() == 4)
+                    {
+                        this.prodEn = this.check_license();
+                        if (!this.prodEn)
+                        {
+                            if (this.showStatus)
+                            {
+                                base.Print("OR:Unlicensed");
+                            }
+                            else if (this.showStatus)
+                            {
+                                base.Print("OR:Licensed");
+                            }
+                        }
+                        if (base.get_BarsArray()[0] != null && this.showStatus)
+                        {
+                            base.Print(string.Concat("OR:Primary series is using time template ", base.get_BarsArray()[0].get_TradingHours().ToString()));
+                        }
+                        this.RHigh = new Series<double>(this, 1);
+                        this.RLow = new Series<double>(this, 1);
+                        this.RMid = new Series<double>(this, 1);
+                        this.RExtension1u = new Series<double>(this, 1);
+                        this.RExtension2u = new Series<double>(this, 1);
+                        this.RExtension3u = new Series<double>(this, 1);
+                        this.RExtension1d = new Series<double>(this, 1);
+                        this.RExtension2d = new Series<double>(this, 1);
+                        this.RExtension3d = new Series<double>(this, 1);
+                        return;
+                    }
+                    if (base.get_State() == 5 && this.ORends < this.ORstarts && this.ORendsDuration == 0)
+                    {
+                        Draw.TextFixed(this, "NinjaScriptInfo", "End time must be greater thane end time. Use 'duration' option instead for ranges where this is not the case", TextPosition.BottomRight);
+                        NinjaScript.Log("OR: End time must be greater thane end time. Use 'duration' option instead for ranges where this is not the case", 3);
+                    }
+                }
+                else
+                {
+                    SimpleFont simpleFont = new SimpleFont("Arial", this.fontsize);
+                    simpleFont.set_Size((double)this.fontsize);
+                    simpleFont.set_Bold(true);
+                    this.myFont = simpleFont;
+                    this.MiD = License.get_MachineId();
+                    if (this.use24x7dataseries)
+                    {
+                        BarsPeriod barsPeriod = new BarsPeriod();
+                        barsPeriod.set_BarsPeriodType(4);
+                        barsPeriod.set_Value(1);
+                        base.AddDataSeries(null, barsPeriod, this.use24x7dataseriesTT);
+                        this.ds = 1;
+                        return;
+                    }
+                }
+                return;
+            }
+            base.set_Description("Marks the opening range, according to your desired timeframe");
+            base.set_Name("pjsOpeningRangeV2");
+            this.productVersion = "2";
+            this.productSKU = "pjsOpeningRange";
+            this.productKey = "";
+            base.set_Calculate(2);
+            base.set_IsOverlay(true);
+            base.set_DisplayInDataBox(true);
+            base.set_DrawOnPricePanel(true);
+            base.set_DrawHorizontalGridLines(true);
+            base.set_DrawVerticalGridLines(true);
+            base.set_PaintPriceMarkers(true);
+            base.set_ScaleJustification(1);
+            base.set_IsSuspendedWhileInactive(false);
+            this.enableCaching = true;
+            this.Extension1 = 0;
+            this.Extension2 = 0;
+            this.Extension3 = 0;
+            this.PriorSession_Extension1 = 0;
+            this.PriorSession_Extension2 = 0;
+            this.PriorSession_Extension3 = 0;
+            this.PriorSession_showInCurrentSessionOnly = false;
+            this.Extension1points = 0;
+            this.ShowMidPoint = false;
+            this.showStatus = false;
+            this.ORstarts = 143000;
+            this.ORendsDuration = 0;
+            this.Label = "OR";
+            this.DetailDashStyle = 0;
+            this.lineWidth = 1;
+            this.ShowPrice = false;
+            this.timesFromMktData = false;
+            this.ShowHighLow = true;
+            this.shortLineOnly = false;
+            this.hideUntilFormed = false;
+            this.drawToEndOfSession = true;
+            this.textOpacity = 80;
+            this.shadeOpacity = 20;
+            this.fontsize = 12;
+            this.autoScale = false;
+            this.use24x7dataseries = false;
+            this.use24x7dataseriesTT = "Default 24 x 7";
+            this.dumpRangeStats = false;
+            this.ShowRangeLabel = false;
+            this.CurrentWeek_showOpen = false;
+            this.CurrentWeek_showLow = false;
+            this.CurrentWeek_showHigh = false;
+            this.CurrentWeek_showMID = false;
+            this.CurrentSession_showOpen = false;
+            this.CurrentSession_showLow = false;
+            this.CurrentSession_showHigh = false;
+            this.CurrentSession_showMID = false;
+            this.PriorSession_showClose = false;
+            this.PriorSession_showLow = false;
+            this.PriorSession_showHigh = false;
+            this.PriorSession_showStats = false;
+            this.PriorSession_showAvgRangeExtension = false;
+            this.PriorSession_showProjectedRangeExtension = false;
+            this.PriorSession_showAvgRangeNoise = false;
+            this.PriorSession_retracements = "";
+            this.AlignLabelsRight = false;
+            this.LabelsBarOffset = 0;
+            this.showasTicksPips = false;
+            this.StrokeNoise = new Stroke(Brushes.Orange);
+            base.AddPlot(Brushes.Transparent, "h");
+            base.AddPlot(Brushes.Transparent, "l");
+            base.AddPlot(Brushes.Transparent, "m");
+            base.AddPlot(Brushes.Transparent, "pc");
+        }
+
+        internal void updateSession(pjsOpeningRangeV2.Session s)
+        {
+            if (s == null)
+            {
+                return;
+            }
+            s.high = this.CurrentSession_High;
+            s.low = this.CurrentSession_Low;
+            s.open = this.CurrentSession_Open;
+            s.close = this.CurrentSession_Close;
+            s.daily_noise = this.daily_range_noise;
+            s.sessioncounter = this.sessionCounter;
+            if (s.range_open_price == 0)
+            {
+                s.prerange_high = Math.Max(s.prerange_high, base.get_Close().get_Item(0));
+                if (s.prerange_low != 0)
+                {
+                    s.prerange_low = Math.Min(s.prerange_low, base.get_Close().get_Item(0));
+                }
+                else
+                {
+                    s.prerange_low = base.get_Close().get_Item(0);
+                }
+            }
+            if (s.range_close_price != 0)
+            {
+                s.postrange_high = Math.Max(s.postrange_high, base.get_Close().get_Item(0));
+                if (s.postrange_low == 0)
+                {
+                    s.postrange_low = base.get_Close().get_Item(0);
+                    return;
+                }
+                s.postrange_low = Math.Min(s.postrange_low, base.get_Close().get_Item(0));
+            }
+        }
+
+        internal class Session
+        {
+            public double postrange_high;
+
+            public double postrange_low;
+
+            public double prerange_high;
+
+            public double prerange_low;
+
+            public double range_close_price;
+
+            public double range_open_price;
+
+            public double range_high;
+
+            public double range_low;
+
+            public double high;
+
+            public double low;
+
+            public double open;
+
+            public double close;
+
+            public double daily_noise;
+
+            public int sessioncounter;
+
+            public DateTime date;
+
+            public Session()
+            {
+            }
+        }
+    }
+}
